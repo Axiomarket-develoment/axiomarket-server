@@ -1,0 +1,13 @@
+const Web3 = require("web3").default;
+const web3 = new Web3("https://api.avax.network/ext/bc/C/rpc");
+
+const AVAX_USD_FEED = "0x0A77230d17318075983913bC2145DB16C7366156";
+const ETH_USD_FEED = "0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB";
+const LINK_USD_FEED = "0x49cc28a5193d1f312250e3ccb0bbf340bde9de9a";
+const ETH_D = "0x976B3D4a7D6c0D3CaFd8a89Bb2083a0dA8f070E";
+
+
+console.log("Is valid address?", web3.utils.isAddress(ETH_USD_FEED));
+console.log("Is valid address?", web3.utils.isAddress(AVAX_USD_FEED));
+console.log("Is valid address?", web3.utils.isAddress(LINK_USD_FEED));
+console.log("Is valid address?", web3.utils.isAddress(ETH_D));
