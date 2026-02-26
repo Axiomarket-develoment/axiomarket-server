@@ -26,6 +26,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors());
 
+
+
+
 // MongoDB connection
 mongoose.set("strictQuery", true);
 
