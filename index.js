@@ -13,7 +13,7 @@ dnsPromises.setServers(["1.1.1.1", "8.8.8.8"]);
 dns.setDefaultResultOrder("ipv4first");
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 4000;
 const MONGO_URI = process.env.MONGO_URI;
 
 if (!MONGO_URI) {
@@ -43,6 +43,7 @@ mongoose
     // Routes
     app.use("/user_market", require("./routes/markets"));
     app.use("/user_trade", require("./routes/trade"));
+    app.use("/user_waitlist", require("./routes/waitlist"));
 
     // Start server
     app.listen(PORT, () => {
