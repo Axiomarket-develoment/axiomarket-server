@@ -1,5 +1,5 @@
 const axios = require("axios");
-const { TOKENS } = require("../../config/coinGeckoTokens");
+const { TOKENS } = require("../../confiq/coinGeckoTokens");
 
 // Fetch ONE token price
 async function fetchCoinGeckoPrice(token) {

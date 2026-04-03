@@ -1,6 +1,6 @@
 // testChainlinkPrices.js
 
-const { PRICE_FEEDS } = require("../../config/priceFeeds");
+const { PRICE_FEEDS } = require("../../confiq/priceFeeds");
 const { fetchCurrentPrice } = require("../../utils/oracle");
 
 (async () => {

@@ -1,5 +1,5 @@
 const axios = require("axios");
-const { BINANCE_SYMBOLS } = require("../../config/priceFeeds");
+const { BINANCE_SYMBOLS } = require("../../confiq/priceFeeds");
 
 async function fetchBinancePrice(token) {
     try {
@@ -20,7 +20,7 @@ module.exports = { fetchBinancePrice };
 
 // Test for binance data prrice below
 
-// // Example usage
+// Example usage
 // (async () => {
 //     console.log("📡 Fetching ALL Binance prices...\n");
 
