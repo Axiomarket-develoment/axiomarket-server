@@ -40,6 +40,7 @@ async function userWithdraw(userPrivateKey, toAddress, amount) {
   }
 }
 
+//  Use AES-256 encryption
 // --- Example usage ---
 (async () => {
   const userPrivateKey = "0xa822ec08d6c67c6f7985e0af6d515d77c0f712d831eda659744712b1eea1893b"; // passed dynamically

@@ -1,6 +1,6 @@
 // server/utils/oracle.js
 const { ethers } = require("ethers");
-const { PRICE_FEEDS } = require("../config/priceFeeds");
+const { PRICE_FEEDS } = require("../confiq/priceFeeds");
 const { getUnifiedPrice } = require("./priceRouer");
 
 // Avalanche RPC
