@@ -10,7 +10,7 @@ const groq = new Groq({
 router.post("/ai-insight", async (req, res) => {
     try {
         const { market } = req.body;
-        console.log(market);
+        // console.log(market);
 
         const prompt = `
 You are a professional prediction market analyst.
@@ -30,8 +30,8 @@ Options:
 ${market.subMarkets
     .map(
         (s) =>
-            `${s.question}: ${s.options
-                .map((o) => `${o.label} (${o.odds}x)`)
+            `${s.question}: ${s.outcomes
+                .map((o) => `${o.label}`) // no odds for now
                 .join(", ")}`
     )
     .join("\n")}

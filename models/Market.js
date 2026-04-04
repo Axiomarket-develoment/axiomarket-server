@@ -6,11 +6,16 @@ const SubMarketSchema = new mongoose.Schema({
   outcomes:               [
                             {
                                 label:     {type: String , required: true},
-                                result:    { type: Boolean, default: null}
+                                result:    { type: Boolean, default: null},
+                                odds:      { type: Number, default: 2.0},
+                                liquidity: {type: Number , default: 0},
+                                volume: {type: Number , default: 0},
+                                count: {type: Number , default: 0},
                             }
                          ],
-  marketType:            { type: String, enum: ["CRYPTO", "SOCIAL", "SPORT"], required: true },
+  marketType:            { type: String, enum: ["CRYPTO", "SOCIAL", "SPORT"] },
   tradeCount:            { type: Number, default: 0 },
+
   resolution:            { 
                             source: String ,
                             method: {
@@ -25,7 +30,7 @@ const SubMarketSchema = new mongoose.Schema({
 
 const MarketSchema = new mongoose.Schema({
   question:              { type: String, required: true },
-  marketType:            { type: String, enum: ["CRYPTO", "SOCIAL", "SPORT"], required: true },
+  marketType:            { type: String, enum: ["CRYPTO", "SOCIAL", "SPORT"] },
   subMarkets:            [SubMarketSchema],
   // sport data
   event:                 { name: String, participants: [String],  participantImages: [String],  league: String ,startTime: Date }, 
@@ -50,7 +55,9 @@ const MarketSchema = new mongoose.Schema({
                           targetPrice: Number,
                           direction: String
                          },
+  result:                { type: String, enum: ["YES", "NO"], default: null },
   createdAt:             { type: Date, default: Date.now },
+  status:                { type: String, enum: ["PENDING", "LIVE", "ENDED", "SETTLED"], default: "LIVE" },
 });
 
 module.exports = mongoose.model("Market", MarketSchema);

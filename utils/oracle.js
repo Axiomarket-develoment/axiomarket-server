@@ -49,19 +49,21 @@ async function fetchCurrentPrice(asset) {
 async function fetchOutcomeFromOracle(market) {
 
     console.log(market)
-    if (!market.asset || !market.targetPrice || !market.direction) {
+
+    // ✅ read from metadata instead of top-level
+    const { asset, targetPrice, direction } = market.metadata;
+    if (!asset || !targetPrice || !direction) {
         throw new Error("❌ Market missing required fields (asset, targetPrice, direction)");
     }
 
-    const { price } = await getUnifiedPrice(market.asset);
+    const { price } = await getUnifiedPrice(asset);
 
-    console.log(`🎯 Market target price: $${market.targetPrice}, direction: ${market.direction}`);
+    console.log(`🎯 Market target price: $${targetPrice}, direction: ${direction}`);
 
-    if (market.direction === "UP") {
-        return price >= market.targetPrice ? "YES" : "NO";
+    if (direction === "UP") {
+        return price >= targetPrice ? "YES" : "NO";
     } else {
-        return price <= market.targetPrice ? "YES" : "NO";
+        return price <= targetPrice ? "YES" : "NO";
     }
 }
-
 module.exports = { fetchCurrentPrice, fetchOutcomeFromOracle, PRICE_FEEDS };
