@@ -45,7 +45,7 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // CORS for frontend + credentials (important for OAuth)
-const allowedOrigins = ["http://localhost:3000"];
+const allowedOrigins = ["http://localhost:3000","https://axiomarket-site.vercel.app","https://axiomarket.xyz"];
 app.use(cors({
   origin: allowedOrigins,
   credentials: true,
@@ -73,13 +73,13 @@ app.use(passport.session());
 mongoose.set("strictQuery", true);
 mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 15000 })
   .then(() => {
-    console.log("🟢 MongoDB connected");
+    // console.log("🟢 MongoDB connected");
 
     // Optional: start cron jobs
     startMarketCron();
   })
   .catch((err) => {
-    console.error("❌ MongoDB connection failed:", err.message);
+    // console.error("❌ MongoDB connection failed:", err.message);
     process.exit(1);
   });
 

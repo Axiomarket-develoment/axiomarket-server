@@ -19,8 +19,8 @@ async function settleMarket(market, outcome) {
     // ✅ Set result
     market.result = outcome.toUpperCase();
 
-    console.log(`⚡ Starting settlement for: ${market.question}`);
-    console.log(`🎯 Result: ${market.result}`);
+    // console.log(`⚡ Starting settlement for: ${market.question}`);
+    // console.log(`🎯 Result: ${market.result}`);
 
     // ==========================
     // 1️⃣ Update outcomes
@@ -41,7 +41,7 @@ async function settleMarket(market, outcome) {
         marketId: market._id
     });
 
-    console.log(`📊 Total fills: ${fills.length}`);
+    // console.log(`📊 Total fills: ${fills.length}`);
 
     // ==========================
     // 3️⃣ Process each trade

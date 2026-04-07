@@ -82,7 +82,7 @@ passport.use(
           if (updated) await user.save();
         }
 
-        console.log("Saved Twitter user:", user);
+        // console.log("Saved Twitter user:", user);
         return done(null, user);
       } catch (err) {
         return done(err, null);
