@@ -44,8 +44,8 @@ async function generateRandomMarket() {
 
     if (TEST_MODE) {
       // For testing: 3-6 minutes
-      minDurationMinutes = 2;
-      maxDurationMinutes = 3;
+      minDurationMinutes = 15;
+      maxDurationMinutes = 30;
     } else {
       // Normal flow: 5m quick, 1h normal
       const isQuickMarket = Math.random() < 0.33;
@@ -186,7 +186,7 @@ async function generateRandomMarket() {
         ),
         createdAt: Date.now(),
       });
-    // console.log("⚡ Synced to Firebase");
+    console.log("⚡ Synced to Firebase");
 
     return savedMarket;
   } catch (err) {
