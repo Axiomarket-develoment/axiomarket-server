@@ -11,9 +11,9 @@ const messageSchema = new mongoose.Schema({
   sender:                     {
                                   type: mongoose.Schema.Types.ObjectId,
                                   required: true,
-                                  refPath: "sender_model"
+                                  ref: "User"
                               },
-
+  sender_name:                {type: String , required: true},
 
   message:                    {   type: String, trim: true },
 

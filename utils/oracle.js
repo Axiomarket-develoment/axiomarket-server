@@ -47,7 +47,6 @@ async function fetchCurrentPrice(asset) {
 
 // Fetch outcome (YES/NO) for a market
 async function fetchOutcomeFromOracle(market) {
-
     console.log(market)
 
     // ✅ read from metadata instead of top-level
@@ -56,7 +55,10 @@ async function fetchOutcomeFromOracle(market) {
         throw new Error("❌ Market missing required fields (asset, targetPrice, direction)");
     }
 
-    const { price } = await getUnifiedPrice(asset);
+    // 🔹 Lazy import to avoid circular dependency
+    const { getUnifiedPrice } = require("./priceRouer");
+
+    const { price } = await getUnifiedPrice(asset, fetchCurrentPrice);
 
     console.log(`🎯 Market target price: $${targetPrice}, direction: ${direction}`);
 

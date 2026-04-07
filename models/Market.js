@@ -16,6 +16,8 @@ const SubMarketSchema = new mongoose.Schema({
   marketType:            { type: String, enum: ["CRYPTO", "SOCIAL", "SPORT"] },
   tradeCount:            { type: Number, default: 0 },
 
+  lastPrice:             {type: Number , default: 2.0},
+
   resolution:            { 
                             source: String ,
                             method: {
@@ -31,6 +33,7 @@ const SubMarketSchema = new mongoose.Schema({
 const MarketSchema = new mongoose.Schema({
   question:              { type: String, required: true },
   marketType:            { type: String, enum: ["CRYPTO", "SOCIAL", "SPORT"] },
+  conversationId:        {type:mongoose.Schema.Types.ObjectId , ref: "Conversation" },
   subMarkets:            [SubMarketSchema],
   // sport data
   event:                 { name: String, participants: [String],  participantImages: [String],  league: String ,startTime: Date }, 

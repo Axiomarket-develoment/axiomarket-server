@@ -3,39 +3,37 @@ const { fetchBinancePrice } = require("../services/price/binancePrice");
 const { fetchCoinGeckoPrice } = require("../services/price/coingeckoPrices");
 const { PRICE_FEEDS } = require("./oracle");
 
-async function getUnifiedPrice(asset) {
+async function getUnifiedPrice(asset, fetchCurrentPriceFn) {
     console.log(`🔄 Getting price for ${asset}...`);
 
-
-
-    // 2️⃣ Try Binance
+    // 1️⃣ Try Binance
     try {
         const price = await fetchBinancePrice(asset);
         if (price) {
-            console.log("✅ Price from Binance");
+            console.log(`✅ Price from Binance: ${price}`);
             return { price, source: "BINANCE" };
         }
     } catch (err) {
         console.warn("⚠️ Binance failed, falling back...");
     }
 
-    // 3️⃣ Try CoinGecko
+    // 2️⃣ Try CoinGecko
     try {
         const price = await fetchCoinGeckoPrice(asset);
         if (price) {
-            console.log("✅ Price from CoinGecko");
+            // console.log(`✅ Price from CoinGecko: ${price}`);
             return { price, source: "COINGECKO" };
         }
     } catch (err) {
         console.warn("⚠️ CoinGecko failed...");
     }
 
-    // 1️⃣ Try Chainlink (if feed exists)
+    // 3️⃣ Try Chainlink (if feed exists)
     if (PRICE_FEEDS[asset]) {
         try {
-            const price = await fetchCurrentPrice(asset);
+            const price = await fetchCurrentPriceFn(asset);
             if (price) {
-                console.log("✅ Price from Chainlink");
+                // console.log(`✅ Price from Chainlink: ${price}`);
                 return { price, source: "CHAINLINK" };
             }
         } catch (err) {

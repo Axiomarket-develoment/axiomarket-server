@@ -1,22 +1,27 @@
-const { SUPPORTED_ASSETS } = require("../../confiq/assets");
 const { QUESTION_TEMPLATES } = require("../../confiq/questionTemplate");
 const Market = require("../../models/Market");
 const { getUnifiedPrice } = require("../../utils/priceRouer");
-
+const mongoose = require("mongoose");
 const { adminDb } = require("../../lib/firebaseAdmin"); // ✅ correct
+const conversation = require("../../models/conversation");
+const { SUPPORTED_ASSETS } = require("../../utils/constants");
+
+
+// console.log("SUPPORTED_ASSETS:", SUPPORTED_ASSETS);
+
+// ✅ Set this to true to enable test mode
+const TEST_MODE = true;
 
 function getDirectionWord(direction) {
   return direction === "UP" ? "up" : "down";
 }
 
-
 function formatDuration(minutes) {
-  const hrs = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-
-  if (hrs > 0 && mins > 0) return `${hrs}h ${mins}m`;
-  if (hrs > 0) return `${hrs}h`;
-  return `${mins}m`;
+  if (minutes >= 60) {
+    const hrs = Math.round(minutes / 60); // round to nearest hour
+    return `${hrs}h`;
+  }
+  return `${minutes}m`;
 }
 
 async function generateRandomMarket() {
@@ -35,19 +40,34 @@ async function generateRandomMarket() {
     const { price: currentPrice } = await getUnifiedPrice(asset);
 
     // ✅ Determine a dynamic end time
-    // Example: end sometime between 5 minutes to 24 hours from now
-    const minDurationMinutes = 5;
-    const maxDurationMinutes = 24 * 60; // 24 hours
+    let minDurationMinutes, maxDurationMinutes;
+
+    if (TEST_MODE) {
+      // For testing: 3-6 minutes
+      minDurationMinutes = 2;
+      maxDurationMinutes = 3;
+    } else {
+      // Normal flow: 5m quick, 1h normal
+      const isQuickMarket = Math.random() < 0.33;
+      minDurationMinutes = isQuickMarket ? 5 : 60;
+      maxDurationMinutes = isQuickMarket ? 40 : 24 * 60;
+    }
+
     const durationMinutes =
-      Math.floor(Math.random() * (maxDurationMinutes - minDurationMinutes)) +
+      Math.floor(Math.random() * (maxDurationMinutes - minDurationMinutes + 1)) +
       minDurationMinutes;
 
     const endDate = new Date(now.getTime() + durationMinutes * 60000);
 
     // Determine market direction and target price
     const direction = Math.random() > 0.5 ? "UP" : "DOWN";
-    const percentMove = Math.random() * 10;
+    let percentMove;
 
+    if (TEST_MODE) {
+      percentMove = Math.random() * 0.05 + 0.01; // 0.1% → 0.6%
+    } else {
+      percentMove = Math.random() * 2 + 0.2; // 0.2% → 2.2%
+    }
     let targetPrice =
       direction === "UP"
         ? currentPrice * (1 + percentMove / 100)
@@ -92,8 +112,8 @@ async function generateRandomMarket() {
           question,
           marketType: "CRYPTO",
           outcomes: [
-            { label: "Yes", result: false, odds: 2.0 },
-            { label: "No", result: false, odds: 2.0 },
+            { label: "Yes", result: false, odds: 2.0, liquidity: 0, volume: 0, count: 0 },
+            { label: "No", result: false, odds: 2.0, liquidity: 0, volume: 0, count: 0 },
           ],
           tradeCount: 0,
           totalVolume: 0,
@@ -120,7 +140,16 @@ async function generateRandomMarket() {
     });
 
     const savedMarket = await market.save();
-    console.log(`🔥 Market Created: ${question}`);
+    // console.log(`🔥 Market Created: ${question}`);
+
+    const convo = await conversation.create({
+      market: savedMarket._id,
+      participants: [],
+      conv_type: "group"
+    })
+
+    savedMarket.conversationId = convo._id
+    await savedMarket.save()
 
     // 🔥 Push to Firebase
     await adminDb
@@ -130,6 +159,9 @@ async function generateRandomMarket() {
         id: savedMarket._id.toString(),
         question: savedMarket.question,
         marketType: savedMarket.marketType,
+
+        conversationId: convo._id.toString(),
+
         metadata: JSON.parse(JSON.stringify(savedMarket.metadata)),
         currentPrice: savedMarket.metadata.startPrice,
         targetPrice: savedMarket.metadata.targetPrice,
@@ -154,7 +186,7 @@ async function generateRandomMarket() {
         ),
         createdAt: Date.now(),
       });
-    console.log("⚡ Synced to Firebase");
+    // console.log("⚡ Synced to Firebase");
 
     return savedMarket;
   } catch (err) {
@@ -162,4 +194,4 @@ async function generateRandomMarket() {
   }
 }
 
-module.exports = { generateRandomMarket };
+module.exports = { generateRandomMarket, TEST_MODE };

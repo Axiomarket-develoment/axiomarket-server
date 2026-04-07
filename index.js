@@ -9,6 +9,10 @@ const session = require("express-session");
 const MongoStore = require("connect-mongo").default;
 const passport = require("./confiq/passport"); // <-- Your Twitter strategy
 const cron = require("node-cron");
+const { createServer } = require("http");
+const { HttpServer } = require("./websocket")
+
+
 const Market = require("./models/Market"); 
 const { startMarketCron } = require("./crons/marketCron");
 
@@ -17,7 +21,14 @@ dnsPromises.setServers(["1.1.1.1", "8.8.8.8"]);
 dns.setDefaultResultOrder("ipv4first");
 
 // ---------------- Express Init ----------------
+
 const app = express();
+const httpServer = createServer(app);
+
+
+HttpServer(httpServer);
+
+
 const PORT = process.env.PORT || 4000;
 const MONGO_URI = process.env.MONGO_URI;
 
@@ -77,8 +88,10 @@ mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 15000 })
 app.use("/user_auth", require("./routes/auth")); // Twitter login routes should be here
 
 app.use("/user_market", require("./routes/markets"));
+app.use("/user_chat", require("./routes/chat"));
 // app.use("/user_trade", require("./routes/trade"));
 app.use("/user_waitlist", require("./routes/waitlist"));
+app.use("/user_history", require("./routes/history"));
 app.use("/ai", require("./routes/ai"));
 
 // Default route
@@ -87,6 +100,6 @@ app.get("/", (req, res) => {
 });
 
 // ---------------- Start server ----------------
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+httpServer.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT} with Socket.IO`);
 });

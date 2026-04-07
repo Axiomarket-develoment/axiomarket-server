@@ -13,7 +13,6 @@ const OrderSchema = new mongoose.Schema({
                                 required: true 
                             },
   walletAddress:            { type: String,    
-                                required:true, 
                                 lowercase:  true,
                                 trim: true 
                             },
@@ -21,11 +20,12 @@ const OrderSchema = new mongoose.Schema({
                                 enum: ["YES", "NO"], 
                                 required: true 
                             }, 
+  filledAmount:              {type: Number, default: 0 , min: 0},
   side:                     { type: String, 
                                 enum: ["BUY", "SELL"], 
                                 required: true 
                             },
-  price:                    { type: Number, required: true, min: 0, max: 1 },
+  price:                    { type: Number, min: 0 },
   amount:                   { type: Number, required: true, min: 0 },
   remainingAmount:          { type: Number, required: true, min: 0 },
 
