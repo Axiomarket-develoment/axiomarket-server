@@ -42,22 +42,18 @@ async function generateRandomMarket() {
     // ✅ Determine a dynamic end time
     let minDurationMinutes, maxDurationMinutes;
 
-    if (TEST_MODE) {
-      // For testing: 3-6 minutes
-      minDurationMinutes = 15;
-      maxDurationMinutes = 30;
-    } else {
-      // Normal flow: 5m quick, 1h normal
-      const isQuickMarket = Math.random() < 0.33;
-      minDurationMinutes = isQuickMarket ? 5 : 60;
-      maxDurationMinutes = isQuickMarket ? 40 : 24 * 60;
-    }
+    // ✅ Determine a dynamic end time
+    const possibleDurations = [5, 15]; // only 5 or 15 min
 
-    const durationMinutes =
-      Math.floor(Math.random() * (maxDurationMinutes - minDurationMinutes + 1)) +
-      minDurationMinutes;
+    // Pick a duration
+    const durationMinutes = possibleDurations[Math.floor(Math.random() * possibleDurations.length)];
 
+    // Compute precise end time
     const endDate = new Date(now.getTime() + durationMinutes * 60000);
+
+    // Round to exact minute
+    endDate.setMilliseconds(0);
+    endDate.setSeconds(0);
 
     // Determine market direction and target price
     const direction = Math.random() > 0.5 ? "UP" : "DOWN";
