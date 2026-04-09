@@ -1,7 +1,7 @@
 
 const { fetchBinancePrice } = require("../services/price/binancePrice");
 const { fetchCoinGeckoPrice } = require("../services/price/coingeckoPrices");
-const { PRICE_FEEDS } = require("./oracle");
+const { PRICE_FEEDS } = require("./priceFeeds");
 
 async function getUnifiedPrice(asset, fetchCurrentPriceFn) {
     console.log(`🔄 Getting price for ${asset}...`);
