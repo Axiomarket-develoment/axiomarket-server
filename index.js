@@ -17,8 +17,8 @@ const Market = require("./models/Market");
 const { startMarketCron } = require("./crons/marketCron");
 
 // ---------------- DNS Config ----------------
-dnsPromises.setServers(["1.1.1.1", "8.8.8.8"]);
-dns.setDefaultResultOrder("ipv4first");
+// dnsPromises.setServers(["1.1.1.1", "8.8.8.8"]);
+// dns.setDefaultResultOrder("ipv4first");
 
 // ---------------- Express Init ----------------
 
@@ -57,7 +57,7 @@ app.use(session({
   secret: process.env.SESSION_SECRET || "super_secret_key",
   resave: true,
   saveUninitialized: true,
-  store: MongoStore.create({ mongoUrl: MONGO_URI }),
+  // store: MongoStore.create({ mongoUrl: MONGO_URI }),
   cookie: {
     secure: process.env.NODE_ENV === "production",
     maxAge: 24 * 60 * 60 * 1000,
@@ -73,14 +73,11 @@ app.use(passport.session());
 mongoose.set("strictQuery", true);
 mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 15000 })
   .then(() => {
-    // console.log("🟢 MongoDB connected");
-
-    // console.log("MONGO_URI:", process.env.MONGO_URI);
-    // Optional: start cron jobs
+    console.log("🟢 MongoDB connected successfully");
     startMarketCron();
   })
   .catch((err) => {
-    console.error("❌ MongoDB connection failed:", err.message);
+    console.error("❌ FULL Mongo Error:", err);
     process.exit(1);
   });
 
