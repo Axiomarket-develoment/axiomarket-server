@@ -57,7 +57,7 @@ function startMarketCron() {
   });
 
   // 🧹 CLEANUP CRON (every 30 mins)
-  cron.schedule("*/30 * * * *", async () => {
+  cron.schedule("*/10 * * * *", async () => {
     console.log("🧹 Running cleanup cron...");
 
     try {
