@@ -60,14 +60,16 @@ async function generateRandomMarket() {
     // Get price
 
     const { getUnifiedPrice } = require("../../utils/priceRouer");
+    const { fetchCurrentPrice } = require("../../utils/oracle");
 
-    const { price: currentPrice } = await getUnifiedPrice(asset, someChainlinkFetcher);
+    const { price: currentPrice } = await getUnifiedPrice(asset, fetchCurrentPrice);
 
     // ✅ Determine a dynamic end time
     let minDurationMinutes, maxDurationMinutes;
 
     // ✅ Determine a dynamic end time
     const possibleDurations = [5,15]; // only 5 or 15 min
+
 
     // Pick a duration
     const durationMinutes = possibleDurations[Math.floor(Math.random() * possibleDurations.length)];
