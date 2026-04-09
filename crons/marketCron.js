@@ -10,8 +10,11 @@ const Fill = require("../models/Fill");
 
 function startMarketCron() {
   // ✅ Runs every 1 minute
-  cron.schedule("*/1 * * * *", async () => {
+  cron.schedule("*/30 * * * * *", async () => {
+
     const now = new Date();
+    console.log("⏱ Running every 30 seconds:", now.toISOString());
+
 
     // 0️⃣ Generate a new market
     try {
@@ -40,7 +43,7 @@ function startMarketCron() {
     for (const market of endedMarkets) {
       try {
         // Only settle if there are participants
-      
+
 
         // Fetch outcome from oracle
         const outcome = await fetchOutcomeFromOracle(market);
@@ -57,7 +60,7 @@ function startMarketCron() {
   });
 
   // 🧹 CLEANUP CRON (every 30 mins)
-  cron.schedule("*/10 * * * *", async () => {
+  cron.schedule("*/5 * * * *", async () => {
     console.log("🧹 Running cleanup cron...");
 
     try {

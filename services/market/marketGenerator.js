@@ -46,7 +46,7 @@ async function generateRandomMarket() {
 
     // Skip if too many live markets
     const liveCount = await Market.countDocuments({ status: "LIVE" });
-    if (liveCount >= 5) return;
+    if (liveCount >= 10) return;
 
     // Pick random asset
     const FETCHABLE_ASSETS = SUPPORTED_ASSETS.filter(
