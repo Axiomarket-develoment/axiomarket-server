@@ -59,13 +59,13 @@ async function generateRandomMarket() {
 
     const asset = FETCHABLE_ASSETS[Math.floor(Math.random() * FETCHABLE_ASSETS.length)];
     // Get price
-    const { price: currentPrice } = await getUnifiedPrice(asset);
+    const { price: currentPrice } = await getUnifiedPrice(asset, someChainlinkFetcher);
 
     // ✅ Determine a dynamic end time
     let minDurationMinutes, maxDurationMinutes;
 
     // ✅ Determine a dynamic end time
-    const possibleDurations = [5]; // only 5 or 15 min
+    const possibleDurations = [5,15]; // only 5 or 15 min
 
     // Pick a duration
     const durationMinutes = possibleDurations[Math.floor(Math.random() * possibleDurations.length)];
@@ -81,7 +81,7 @@ async function generateRandomMarket() {
     let percentMove;
 
     if (TEST_MODE) {
-      percentMove = Math.random() * 0.05 + 0.01; // 0.1% → 0.6%
+      percentMove = Math.random() * 0.1 + 0.5; // 0.1% → 0.6%
     } else {
       percentMove = Math.random() * 2 + 0.2; // 0.2% → 2.2%
     }
