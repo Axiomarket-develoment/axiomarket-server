@@ -75,12 +75,12 @@ mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 15000 })
   .then(() => {
     // console.log("🟢 MongoDB connected");
 
-    console.log("MONGO_URI:", process.env.MONGO_URI);
+    // console.log("MONGO_URI:", process.env.MONGO_URI);
     // Optional: start cron jobs
     startMarketCron();
   })
   .catch((err) => {
-    // console.error("❌ MongoDB connection failed:", err.message);
+    console.error("❌ MongoDB connection failed:", err.message);
     process.exit(1);
   });
 
