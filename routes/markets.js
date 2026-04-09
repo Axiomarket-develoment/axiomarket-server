@@ -112,72 +112,97 @@ router.post("/user_enter_market", async (req, res) => {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         const userId = decoded.id;
 
-        const user = await User.findById(userId);
+        const user = await User.findById(userId).select("-password");
         const market = await Market.findById(marketId);
-        const subMarket = market.subMarkets.id(subMarketId);
+        const subMarket = market?.subMarkets.id(subMarketId);
 
         if (!user || !market || !subMarket) {
             return res.status(404).json({ error: "Invalid data" });
         }
 
         if (user.balance.testnet < amount) {
-            return res.status(400).json({ error: "Insufficient balance" });
+            return res.status(400).json({ error: true, msg: "Insufficient balance" });
         }
-
-        const selectedOutcome = subMarket.outcomes.find(o => o.label === outcome);
-        if (!selectedOutcome) {
-            return res.status(400).json({ error: "Invalid outcome" });
-        }
-
-        const price = 1 / selectedOutcome.odds;
 
         // 🔒 Lock funds
         user.balance.testnet -= amount;
         user.balance.locked += amount;
 
-        // ✅ Normalize
-        let normalizedOutcome = "YES";
-        let side = "BUY";
+        // ✅ Update selected outcome
+        const selectedOutcome = subMarket.outcomes.find(
+            o => o.label.toLowerCase() === outcome.toLowerCase()
+        );
+        if (!selectedOutcome) return res.status(400).json({ error: "Invalid outcome" });
 
-        if (outcome.toUpperCase() === "NO") {
-            normalizedOutcome = "YES";
-            side = "SELL";
-        }
+        selectedOutcome.pool += amount;
+        selectedOutcome.count += 1;
 
-        const order = await Order.create({
+        // ✅ Save position
+        const position = await Position.create({
             userId,
             marketId,
             subMarketId,
-            outcome: normalizedOutcome,
-            side,
-            price,
-            amount,
-            remainingAmount: amount,
-            filledAmount: 0,
-            status: "OPEN",
+            outcome,
+            amount
         });
+
+        // Update subMarket stats
+        subMarket.tradeCount += 1;
+        subMarket.totalVolume += amount;
+
+        // 🔹 Round user balances
+        user.balance.testnet = Number(user.balance.testnet.toFixed(2));
+        user.balance.locked = Number(user.balance.locked.toFixed(2));
 
         await user.save();
-        await syncUserBalance(user)
+        await market.save();
 
-        // 🔥 Save order to Firestore (LIVE tracking)
-        await adminDb.collection("orders").doc(order._id.toString()).set({
-            userId,
-            marketId,
-            subMarketId,
-            side,
-            price,
-            amount,
-            remainingAmount: amount,
-            filledAmount: 0,
-            status: "OPEN",
-            createdAt: Date.now()
+        // 🔹 Sync updated market to Firestore
+        const marketDoc = adminDb.collection("markets").doc(market._id.toString());
+        await marketDoc.update({
+            subMarkets: market.subMarkets.map(sub => ({
+                id: sub._id.toString(),
+                question: sub.question || null,
+                outcomes: sub.outcomes.map(o => ({
+                    label: o.label || null,
+                    pool: o.pool || 0,
+                    count: o.count || 0,
+                    odds: o.odds || 2.0,
+                    result: o.result ?? null,
+                    volume: o.volume || 0,
+                    liquidity: o.liquidity || 0
+                })),
+                tradeCount: sub.tradeCount || 0,
+                totalVolume: sub.totalVolume || 0,
+                status: sub.status || "LIVE",
+                targetPrice: sub.targetPrice ?? null
+            })),
+            totalVolume: market.totalVolume || 0,
+            tradeCount: market.tradeCount || 0,
+            status: market.status || "LIVE"
         });
 
-        // 🔥 MATCH
-        await matchOrders(marketId, subMarketId);
+        // 🔹 **Sync user balance to Firestore**
+        await syncUserBalance(user);
 
-        res.json({ success: true, order, user });
+        // 🔹 Return full user data without password
+        res.json({
+            success: true,
+            message: "User entered market successfully",
+            user, // full user object, no password
+            market: {
+                id: market._id,
+                subMarketId: subMarket._id,
+                outcomes: subMarket.outcomes.reduce((acc, o) => {
+                    acc[o.label] = { pool: o.pool, count: o.count };
+                    return acc;
+                }, {}),
+                totalPool: subMarket.outcomes.reduce((a, o) => a + o.pool, 0),
+                totalCount: subMarket.outcomes.reduce((a, o) => a + o.count, 0)
+            },
+            positionId: position._id,
+            amount: Number(amount.toFixed(2))
+        });
 
     } catch (err) {
         console.error(err);
@@ -185,215 +210,38 @@ router.post("/user_enter_market", async (req, res) => {
     }
 });
 
-const matchOrders = async (marketId, subMarketId) => {
-    // Fetch market and subMarket
-    const market = await Market.findById(marketId);
-    const subMarket = market.subMarkets.id(subMarketId);
+router.post("/save_market", async (req, res) => {
+    try {
+        const { token, marketId, action } = req.body; // action = "save" | "unsave"
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const userId = decoded.id;
 
-    // Fetch open buy and sell orders
-    const buyOrders = await Order.find({
-        marketId,
-        subMarketId,
-        outcome: "YES",
-        side: "BUY",
-        status: { $in: ["OPEN", "PARTIAL"] },
-    }).sort({ price: -1, createdAt: 1 });
+        const user = await User.findById(userId);
+        if (!user) return res.status(404).json({ error: "User not found" });
 
-    const sellOrders = await Order.find({
-        marketId,
-        subMarketId,
-        outcome: "YES",
-        side: "SELL",
-        status: { $in: ["OPEN", "PARTIAL"] },
-    }).sort({ price: 1, createdAt: 1 });
+        // MongoDB
+        user.savedMarket = action === "save" ? marketId : null;
+        await user.save();
 
-
-    const yesOutcome = subMarket.outcomes.find(
-        o => o.label.toUpperCase() === "YES"
-    );
-
-    const noOutcome = subMarket.outcomes.find(
-        o => o.label.toUpperCase() === "NO"
-    );
-
-    // initialize if first time
-    if (!yesOutcome.odds) yesOutcome.odds = 2.0;
-    if (!noOutcome.odds) noOutcome.odds = 2.0;
-
-
-    // Match orders
-    for (let buy of buyOrders) {
-        if (buy.remainingAmount <= 0) continue;
-
-        for (let sell of sellOrders) {
-            if (sell.remainingAmount <= 0) continue;
-            if (buy.price < sell.price) continue;
-
-            // Determine matched amount
-            const tradeAmount = Math.min(buy.remainingAmount, sell.remainingAmount);
-            const shares = tradeAmount;
-
-            // Create positions
-            await Position.create({
-                userId: buy.userId,
-                marketId,
-                subMarketId,
-                outcome: "YES",
-                shares,
-            });
-
-            await Position.create({
-                userId: sell.userId,
-                marketId,
-                subMarketId,
-                outcome: "NO",
-                shares,
-            });
-
-            // Create fill record
-            await Fill.create({
-                buyOrderId: buy._id,
-                sellOrderId: sell._id,
-                price: buy.price,
-                amount: tradeAmount,
-                marketId,
-                subMarketId,
-            });
-
-            // Update order amounts
-            buy.remainingAmount -= tradeAmount;
-            sell.remainingAmount -= tradeAmount;
-
-            buy.filledAmount += tradeAmount;
-            sell.filledAmount += tradeAmount;
-
-            buy.status = buy.remainingAmount === 0 ? "FILLED" : "PARTIAL";
-            sell.status = sell.remainingAmount === 0 ? "FILLED" : "PARTIAL";
-
-
-            console.log("Matching buy", buy._id, "price", buy.price, "remaining", buy.remainingAmount);
-            console.log("Against sell", sell._id, "price", sell.price, "remaining", sell.remainingAmount);
-
-
-            await buy.save();
-            await sell.save();
-
-            const buyUser = await User.findById(buy.userId);
-            const sellUser = await User.findById(sell.userId);
-
-            if (buyUser) await syncUserBalance(buyUser);
-            if (sellUser) await syncUserBalance(sellUser);
-
-            console.log("TradeAmount:", tradeAmount);
-
-            // Firestore live update
-            await adminDb.collection("orders").doc(buy._id.toString()).set({
-                remainingAmount: buy.remainingAmount,
-                filledAmount: buy.filledAmount,
-                status: buy.status,
-            }, { merge: true });
-            await adminDb.collection("orders").doc(sell._id.toString()).update({
-                remainingAmount: sell.remainingAmount,
-                filledAmount: sell.filledAmount,
-                status: sell.status,
-            }, { merge: true });
-
-            // Update volumes
-            // After each matched trade
-            subMarket.totalVolume += tradeAmount;
-            subMarket.tradeCount += 1;
-
-            market.totalVolume += tradeAmount;
-            market.tradeCount += 1;
-
-            // If subMarket is a Mongoose subdocument, mark it modified
-            market.markModified('subMarkets');
-
-            // Update outcome volume/count
-            yesOutcome.volume += tradeAmount;
-            yesOutcome.count += 1;
-            noOutcome.volume += tradeAmount;
-            noOutcome.count += 1;
-
-            // Save Mongoose market
-            await market.save();
-
-            // Update Firestore
-            await adminDb.collection("markets").doc(marketId.toString()).update({
-                totalVolume: market.totalVolume,
-                tradeCount: market.tradeCount,
-                subMarkets: market.subMarkets.map((sub) => ({
-                    id: sub._id.toString(),
-                    question: sub.question,
-                    lastPrice: sub.lastPrice,
-                    outcomes: sub.outcomes.map(o => ({
-                        label: o.label,
-                        odds: o.odds,
-                        liquidity: o.liquidity,
-                        volume: o.volume,
-                        count: o.count
-                    })),
-                    tradeCount: sub.tradeCount,
-                    totalVolume: sub.totalVolume,
-                    status: sub.status,
-                }))
-            });
-
-            // Break if buy is fully filled
-            if (buy.remainingAmount === 0) break;
+        // Firestore
+        const userDoc = adminDb.collection("users").doc(user._id.toString());
+        const userSnap = await userDoc.get();
+        if (userSnap.exists) {
+            let savedMarkets = userSnap.data().savedMarkets || [];
+            if (action === "save" && !savedMarkets.includes(marketId)) {
+                savedMarkets.push(marketId);
+            } else if (action === "unsave") {
+                savedMarkets = savedMarkets.filter(id => id !== marketId);
+            }
+            await userDoc.update({ savedMarkets });
         }
+
+        res.json({ success: true, action, savedMarket: user.savedMarket });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
     }
+});
 
-
-    // ✅ STEP-BASED ODDS SYSTEM
-    const round2 = (num) => Math.round(num * 100) / 100;
-
-
-    const STEP = 0.1;
-    const MIN_ODDS = 1.0;
-    const MAX_ODDS = 3.0;
-
-
-
-    // determine what user did
-    // we use LAST order to adjust odds
-    const lastOrder = await Order.findOne({ marketId, subMarketId })
-        .sort({ createdAt: -1 });
-
-    if (lastOrder) {
-        if (lastOrder.side === "BUY") {
-            yesOutcome.odds = round2(Math.max(MIN_ODDS, yesOutcome.odds - STEP));
-            noOutcome.odds = round2(Math.min(MAX_ODDS, noOutcome.odds + STEP));
-        } else {
-            yesOutcome.odds = round2(Math.min(MAX_ODDS, yesOutcome.odds + STEP));
-            noOutcome.odds = round2(Math.max(MIN_ODDS, noOutcome.odds - STEP));
-        }
-    }
-
-    // For lastPrice, show probability or decimal price
-    subMarket.lastPrice = round2(1 / yesOutcome.odds);
-    await market.save();
-
-    // Firestore sync
-    await adminDb.collection("markets").doc(marketId.toString()).update({
-        totalVolume: market.totalVolume,
-        tradeCount: market.tradeCount,
-        subMarkets: market.subMarkets.map((sub) => ({
-            id: sub._id.toString(),
-            question: sub.question,
-            lastPrice: sub.lastPrice,
-            outcomes: sub.outcomes.map(o => ({
-                label: o.label,
-                odds: o.odds,
-                liquidity: o.liquidity,
-                volume: o.volume,
-                count: o.count
-            })),
-            tradeCount: sub.tradeCount,
-            totalVolume: sub.totalVolume,
-            status: sub.status,
-        }))
-    });
-};
 
 module.exports = router;

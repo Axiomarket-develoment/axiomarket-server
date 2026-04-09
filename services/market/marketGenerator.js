@@ -4,7 +4,7 @@ const { getUnifiedPrice } = require("../../utils/priceRouer");
 const mongoose = require("mongoose");
 const { adminDb } = require("../../lib/firebaseAdmin"); // ✅ correct
 const conversation = require("../../models/conversation");
-const { SUPPORTED_ASSETS } = require("../../utils/constants");
+const { SUPPORTED_ASSETS, BINANCE_SYMBOLS, TOKENS, PRICE_FEEDS } = require("../../utils/constants");
 
 
 // console.log("SUPPORTED_ASSETS:", SUPPORTED_ASSETS);
@@ -15,6 +15,23 @@ const TEST_MODE = true;
 function getDirectionWord(direction) {
   return direction === "UP" ? "up" : "down";
 }
+
+function getNextRoundTime(minutes) {
+  const now = new Date();
+
+  const ms = minutes * 60 * 1000;
+  const rounded = Math.ceil(now.getTime() / ms) * ms;
+
+  return new Date(rounded);
+}
+
+
+function getSymbol(asset) {
+  return BINANCE_SYMBOLS[asset]
+    ? `$${BINANCE_SYMBOLS[asset].replace("USDT", "")}`
+    : `$${asset.replace(/-/g, "").toUpperCase()}`;
+}
+
 
 function formatDuration(minutes) {
   if (minutes >= 60) {
@@ -33,9 +50,14 @@ async function generateRandomMarket() {
     if (liveCount >= 5) return;
 
     // Pick random asset
-    const asset =
-      SUPPORTED_ASSETS[Math.floor(Math.random() * SUPPORTED_ASSETS.length)];
+    const FETCHABLE_ASSETS = SUPPORTED_ASSETS.filter(
+      (asset) =>
+        BINANCE_SYMBOLS[asset] ||
+        TOKENS.includes(asset) ||
+        (PRICE_FEEDS[asset] && PRICE_FEEDS[asset] !== null)
+    );
 
+    const asset = FETCHABLE_ASSETS[Math.floor(Math.random() * FETCHABLE_ASSETS.length)];
     // Get price
     const { price: currentPrice } = await getUnifiedPrice(asset);
 
@@ -43,14 +65,13 @@ async function generateRandomMarket() {
     let minDurationMinutes, maxDurationMinutes;
 
     // ✅ Determine a dynamic end time
-    const possibleDurations = [5, 15]; // only 5 or 15 min
+    const possibleDurations = [5]; // only 5 or 15 min
 
     // Pick a duration
     const durationMinutes = possibleDurations[Math.floor(Math.random() * possibleDurations.length)];
 
     // Compute precise end time
-    const endDate = new Date(now.getTime() + durationMinutes * 60000);
-
+    const endDate = getNextRoundTime(durationMinutes);
     // Round to exact minute
     endDate.setMilliseconds(0);
     endDate.setSeconds(0);
@@ -90,6 +111,7 @@ async function generateRandomMarket() {
     // Replace placeholders dynamically
     const question = template
       .replace("{asset}", asset)
+      .replace("{assetSymbol}", getSymbol(asset))
       .replace("{directionWord}", getDirectionWord(direction))
       .replace("{duration}", formatDuration(durationMinutes))
       .replace("{percent}", percentMove.toFixed(2))
@@ -108,8 +130,8 @@ async function generateRandomMarket() {
           question,
           marketType: "CRYPTO",
           outcomes: [
-            { label: "Yes", result: false, odds: 2.0, liquidity: 0, volume: 0, count: 0 },
-            { label: "No", result: false, odds: 2.0, liquidity: 0, volume: 0, count: 0 },
+            { label: "Yes", result: false, odds: 2.0, pool: 0, liquidity: 0, volume: 0, count: 0 },
+            { label: "No", result: false, odds: 2.0, pool: 0, liquidity: 0, volume: 0, count: 0 },
           ],
           tradeCount: 0,
           totalVolume: 0,
@@ -127,9 +149,10 @@ async function generateRandomMarket() {
         chartImage: null,
         startPrice: currentPrice,
         targetPrice,
+        assetSymbol: getSymbol(asset),
         direction,
       },
-      startDate: now,
+      startDate: new Date(endDate.getTime() - durationMinutes * 60000),
       endDate,
       durationMinutes,
       status: "LIVE",

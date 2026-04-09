@@ -4,136 +4,119 @@ const Fill = require("../../models/Fill");
 const User = require("../../models/User");
 const { adminDb } = require("../../lib/firebaseAdmin");
 const syncUserBalance = require("../../functions/syncUserBalance");
+const Position = require("../../models/Position");
 
-  
+async function settleMarket(market, winningOutcomeLabel) {
+    console.log("\n==============================");
+    console.log("🚀 START SETTLEMENT");
+    console.log("Market ID:", market._id);
+    console.log("Question:", market.question);
+    console.log("==============================\n");
 
-async function settleMarket(market, outcome) {
-    console.log("++++++++++++++ Settling market:", market._id);
-
-    // ✅ Validate
     if (!market || market.status !== "ENDED") {
-        console.log("❌ Market is invalid or not ended.");
+        console.log("❌ Market not eligible for settlement");
         return;
     }
 
-    // ✅ Set result
-    market.result = outcome.toUpperCase();
+    if (!winningOutcomeLabel) {
+        console.log("❌ No outcome provided");
+        return;
+    }
 
-    // console.log(`⚡ Starting settlement for: ${market.question}`);
-    // console.log(`🎯 Result: ${market.result}`);
+    market.result = winningOutcomeLabel.toUpperCase();
+    console.log("🏁 Winning Outcome:", market.result);
 
-    // ==========================
-    // 1️⃣ Update outcomes
-    // ==========================
-    for (const subMarket of market.subMarkets) {
-        subMarket.outcomes = subMarket.outcomes.map(o => ({
+    for (const sub of market.subMarkets) {
+        console.log("\n--- SUB MARKET ---");
+        console.log("SubMarket ID:", sub._id);
+
+        let totalWinningPool = 0;
+        let totalLosingPool = 0;
+
+        // 1️⃣ Pools breakdown
+        sub.outcomes.forEach(o => {
+            o.pool = Number(o.pool.toFixed(2));
+
+            console.log(`Outcome: ${o.label} | Pool: ${o.pool}`);
+
+            if (o.label.toUpperCase() === market.result) {
+                totalWinningPool += o.pool;
+            } else {
+                totalLosingPool += o.pool;
+            }
+        });
+
+        console.log("🟢 Total Winning Pool:", totalWinningPool);
+        console.log("🔴 Total Losing Pool:", totalLosingPool);
+
+        sub.status = "SETTLED";
+
+        // 2️⃣ Fetch fills
+        const positions = await Position.find({
+            marketId: market._id,
+            subMarketId: sub._id
+        });
+
+        console.log("👥 Total Participants:", positions.length);
+
+        if (!positions.length) {
+            console.log("⚠ No participants — skipping payouts but marking settled");
+            continue;
+        }
+
+        for (const position of positions) {
+            const user = await User.findById(position.userId);
+            if (!user) continue;
+
+            const userOutcome = position.outcome.toUpperCase();
+            const userAmount = Number(position.amount.toFixed(2));
+
+            console.log("\n👤 USER:", user._id);
+            console.log("Bet:", userAmount, "| Outcome:", userOutcome);
+
+            // 🔓 Unlock funds
+            user.balance.locked -= userAmount;
+            user.balance.locked = Math.max(0, user.balance.locked);
+
+            let payout = 0;
+
+            if (userOutcome === market.result) {
+                const share = totalWinningPool > 0 ? userAmount / totalWinningPool : 0;
+
+                payout = userAmount + share * totalLosingPool;
+                payout = Number(payout.toFixed(2));
+
+                user.balance.testnet += payout;
+
+                console.log("✅ WINNER → payout:", payout);
+            } else {
+                console.log("❌ LOSER");
+            }
+
+            user.balance.testnet = Number(user.balance.testnet.toFixed(2));
+
+            await user.save();
+            await syncUserBalance(user);
+
+            console.log("🔄 Synced to Firebase");
+        }
+
+        // 4️⃣ Mark results
+        sub.outcomes = sub.outcomes.map(o => ({
             ...o.toObject(),
             result: o.label.toUpperCase() === market.result
         }));
 
-        subMarket.status = "SETTLED";
+        console.log("✅ SubMarket settled");
     }
 
-    // ==========================
-    // 2️⃣ Get all FILLS (REAL TRADES)
-    // ==========================
-    const fills = await Fill.find({
-        marketId: market._id
-    });
-
-    // console.log(`📊 Total fills: ${fills.length}`);
-
-    // ==========================
-    // 3️⃣ Process each trade
-    // ==========================
-    for (const fill of fills) {
-        const buyOrder = await Order.findById(fill.buyOrderId);
-        const sellOrder = await Order.findById(fill.sellOrderId);
-
-        if (!buyOrder || !sellOrder) continue;
-
-        const tradeAmount = fill.amount;
-
-        const buyUser = await User.findById(buyOrder.userId);
-        const sellUser = await User.findById(sellOrder.userId);
-
-
-        if (!buyUser || !sellUser) continue;
-
-        console.log("🔄 Processing trade:");
-        console.log(`   Trade amount: ${tradeAmount}`);
-        console.log(`   Buy user: ${buyUser._id}`);
-        console.log(`   Sell user: ${sellUser._id}`);
-
-        // ==========================
-        // 🎯 WINNER LOGIC
-        // ==========================
-        if (market.result === "YES") {
-            // Buyer wins
-            const payout = tradeAmount * 2;
-
-            console.log(`   ✅ BUYER WINS → payout: ${payout}`);
-
-            buyUser.balance.testnet += payout;
-
-        } else {
-            // Seller wins
-            const payout = tradeAmount * 2;
-
-            console.log(`   ✅ SELLER WINS → payout: ${payout}`);
-
-            sellUser.balance.testnet += payout;
-        }
-
-        console.log("Syncing buy user balance:", buyUser._id, buyUser.balance);
-        console.log("Syncing sell user balance:", sellUser._id, sellUser.balance);
-
-        console.log("BuyUser _id type:", typeof buyUser._id, buyUser._id);
-        console.log("SellUser _id type:", typeof sellUser._id, sellUser._id);
-
-
-        // ==========================
-        // 🔓 UNLOCK FUNDS (BOTH SIDES)
-        // ==========================
-       
-
-        // UNLOCK BOTH
-        buyUser.balance.locked -= tradeAmount;
-        sellUser.balance.locked -= tradeAmount;
-
-        // SAFETY
-        buyUser.balance.locked = Math.max(0, buyUser.balance.locked);
-        sellUser.balance.locked = Math.max(0, sellUser.balance.locked);
-
-        // SAVE
-        await buyUser.save();
-        await sellUser.save();
-
-        // 🔥 SYNC BOTH USERS (VERY IMPORTANT)
-        console.log("syncUserBalance type:", typeof syncUserBalance);
-        await syncUserBalance(buyUser);
-        await syncUserBalance(sellUser);
-    }
-
-    // ==========================
-    // 4️⃣ Mark orders as settled
-    // ==========================
-    await Order.updateMany(
-        { marketId: market._id },
-        { status: "SETTLED" }
-    );
-
-    // ==========================
     // 5️⃣ Finalize market
-    // ==========================
     market.status = "SETTLED";
     await market.save();
 
-    console.log("✅ Market settled in DB");
+    console.log("\n📦 Market status updated to SETTLED");
 
-    // ==========================
-    // 6️⃣ Firestore Sync
-    // ==========================
+    // 6️⃣ Firestore sync
     await adminDb.collection("markets").doc(market._id.toString()).set({
         status: market.status,
         result: market.result,
@@ -144,16 +127,21 @@ async function settleMarket(market, outcome) {
                 result: o.result,
                 odds: o.odds,
                 liquidity: o.liquidity,
-                volume: o.volume
+                volume: o.volume,
+                pool: Number(o.pool.toFixed(2)),
+                count: o.count
             })),
             status: sub.status,
-            totalVolume: sub.totalVolume,
+            totalVolume: Number(sub.totalVolume.toFixed(2)),
             tradeCount: sub.tradeCount
         }))
     }, { merge: true });
 
-    console.log(`⚡ Firestore synced`);
-    console.log(`🎯 FULLY SETTLED: ${market.question}`);
+    console.log("☁️ Firestore updated");
+
+    console.log("\n==============================");
+    console.log("🎉 SETTLEMENT COMPLETE");
+    console.log("==============================\n");
 }
 
 module.exports = { settleMarket };

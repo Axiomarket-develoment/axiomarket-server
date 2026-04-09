@@ -11,6 +11,7 @@ const SubMarketSchema = new mongoose.Schema({
                                 liquidity: {type: Number , default: 0},
                                 volume: {type: Number , default: 0},
                                 count: {type: Number , default: 0},
+                                pool: { type: Number, default: 0 }
                             }
                          ],
   marketType:            { type: String, enum: ["CRYPTO", "SOCIAL", "SPORT"] },
@@ -56,6 +57,7 @@ const MarketSchema = new mongoose.Schema({
                           chartImage: String,
                           startPrice: Number,
                           targetPrice: Number,
+                          assetSymbol: String,
                           direction: String
                          },
   result:                { type: String, enum: ["YES", "NO"], default: null },

@@ -7,9 +7,10 @@ const PositionSchema = new mongoose.Schema({
   marketId:             { type: mongoose.Schema.Types.ObjectId, ref: "Market", required: true },
   subMarketId:          { type: mongoose.Schema.Types.ObjectId ,required: true },
 
-  outcome:              { type: String, enum: ["YES", "NO"] },
+  outcome:              { type: String, required: true },
 
-  shares:               { type: Number, required: true }
+  // shares:               { type: Number, required: true },
+  amount:               { type: Number, required: true }
 });
 
 module.exports = mongoose.model("Position", PositionSchema);

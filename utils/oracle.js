@@ -37,7 +37,7 @@ async function fetchCurrentPrice(asset) {
         const data = await feed.latestRoundData();
         const price = Number(data[1].toString()) / (10 ** feedConfig.decimals);
 
-        console.log(`💲 Current ${asset} price: $${price}`);
+        // console.log(`💲 Current ${asset} price: $${price}`);
         return price;
     } catch (err) {
         console.error(`❌ Failed to fetch price for ${asset}:`, err.message);
@@ -47,7 +47,7 @@ async function fetchCurrentPrice(asset) {
 
 // Fetch outcome (YES/NO) for a market
 async function fetchOutcomeFromOracle(market) {
-    console.log(market)
+    // console.log(market)
 
     // ✅ read from metadata instead of top-level
     const { asset, targetPrice, direction } = market.metadata;

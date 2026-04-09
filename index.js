@@ -29,7 +29,7 @@ const httpServer = createServer(app);
 HttpServer(httpServer);
 
 
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT || 7000;
 const MONGO_URI = process.env.MONGO_URI;
 
 if (!MONGO_URI) {
@@ -76,7 +76,7 @@ mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 15000 })
     // console.log("🟢 MongoDB connected");
 
     // Optional: start cron jobs
-    // startMarketCron();
+    startMarketCron();
   })
   .catch((err) => {
     // console.error("❌ MongoDB connection failed:", err.message);

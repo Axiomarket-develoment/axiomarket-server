@@ -15,5 +15,5 @@ module.exports = { generateAvalancheWallet };
 
 (async () => {
     const wallet = await generateAvalancheWallet();
-    console.log("🔥 Wallet generated:\n", wallet);
+    // console.log("🔥 Wallet generated:\n", wallet);
 })();

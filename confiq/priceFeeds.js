@@ -4,6 +4,7 @@ const PRICE_FEEDS = {
     binancecoin: { address: "0x14e613AC84a31f6B01bcfc4b4f105C19C0800f0d", decimals: 8 },
     dogecoin: { address: "0x0dF2db3eE0A3Dadf887cE619BFa4d6913A78A8F5", decimals: 8 },
     avalanche: { address: "0x0A77230d17318075983913bC2145DB16C7366156", decimals: 8 },
+    avalanche: { address: "0x0A77230d17318075983913bC2145DB16C7366156", decimals: 8 },
 
     // Fallbacks
     solana: null,
@@ -24,8 +25,16 @@ const BINANCE_SYMBOLS = {
   solana:      "SOLUSDT",
   binancecoin: "BNBUSDT",
   avalanche:   "AVAXUSDT",
+  "avalanche-2": "AVAXUSDT",
   dogecoin:    "DOGEUSDT",
+   arbitrum: "ARBUSDT",
   sui:         "SUIUSDT",
+
+  mantle:         "MNTUSDT",
+  "mantle-network": "MNTUSDT", // optional (depends on your API source)
+
+  "shiba-inu":      "SHIBUSDT",
+  shib:           "SHIBUSDT",
 };
 
 
