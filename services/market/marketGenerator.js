@@ -1,6 +1,5 @@
 const { QUESTION_TEMPLATES } = require("../../confiq/questionTemplate");
 const Market = require("../../models/Market");
-const { getUnifiedPrice } = require("../../utils/priceRouer");
 const mongoose = require("mongoose");
 const { adminDb } = require("../../lib/firebaseAdmin"); // ✅ correct
 const conversation = require("../../models/conversation");
@@ -59,6 +58,9 @@ async function generateRandomMarket() {
 
     const asset = FETCHABLE_ASSETS[Math.floor(Math.random() * FETCHABLE_ASSETS.length)];
     // Get price
+
+    const { getUnifiedPrice } = require("../../utils/priceRouer");
+
     const { price: currentPrice } = await getUnifiedPrice(asset, someChainlinkFetcher);
 
     // ✅ Determine a dynamic end time
