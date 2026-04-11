@@ -59,9 +59,9 @@
 const QUESTION_TEMPLATES = [
   "Will {assetSymbol} be above ${target} in the next {duration} ?",
   // "Will the next {assetSymbol} candle close {directionWord} in {duration} ?",
-  "Can {assetSymbol} break above ${target} within {duration} ?",
+  // "Can {assetSymbol} break above ${target} within {duration} ?",
   // "Will {assetSymbol} stay {directionWord} for the next {duration} ?",
-  "Is {assetSymbol} likely to drop below ${target} in {duration} ?"
+  // "Is {assetSymbol} likely to drop below ${target} in {duration} ?"
 ];
 
 module.exports = { QUESTION_TEMPLATES };
