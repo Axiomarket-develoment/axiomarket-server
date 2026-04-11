@@ -13,8 +13,10 @@ const { createServer } = require("http");
 const { HttpServer } = require("./websocket")
 
 
-const Market = require("./models/Market"); 
+const Market = require("./models/Market");
 const { startMarketCron } = require("./crons/marketCron");
+const { startOracle } = require("./services/price/priceOracle");
+const { syncWalletBalances } = require("./services/wallet/syncWalletBalance");
 
 // ---------------- DNS Config ----------------
 // dnsPromises.setServers(["1.1.1.1", "8.8.8.8"]);
@@ -45,7 +47,7 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // CORS for frontend + credentials (important for OAuth)
-const allowedOrigins = ["http://localhost:3000","https://axiomarket-site.vercel.app","https://axiomarket.xyz"];
+const allowedOrigins = ["http://localhost:3000", "https://axiomarket-site.vercel.app", "https://axiomarket.xyz"];
 app.use(cors({
   origin: allowedOrigins,
   credentials: true,
@@ -75,6 +77,11 @@ mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 15000 })
   .then(() => {
     console.log("🟢 MongoDB connected successfully");
     startMarketCron();
+    startOracle()
+
+    setInterval(() => {
+      syncWalletBalances();
+    }, 60000);
   })
   .catch((err) => {
     console.error("❌ FULL Mongo Error:", err);

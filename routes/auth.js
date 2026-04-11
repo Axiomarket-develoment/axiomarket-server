@@ -14,20 +14,34 @@ const JWT_SECRET = process.env.JWT_SECRET;
 // ==========================
 // 🔥 FIRESTORE SYNC HELPER
 // ==========================
+const { getPrice } = require("../services/price/priceOracle");
+
 const syncUserToFirestore = async (user, provider) => {
     const plainUser = user.toObject ? user.toObject() : user;
+
+    const avaxPrice = getPrice("avalanche-2") || 0;
+
+    const avaxBalance =
+        avaxPrice > 0
+            ? Number((plainUser.balance.testnet / avaxPrice).toFixed(2))
+            : 0;
 
     await adminDb.collection("users").doc(plainUser._id.toString()).set({
         id: plainUser._id.toString(),
         email: plainUser.email || "",
         username: plainUser.username || "",
-        fullName: String(plainUser.fullName || ""), // force string
+        fullName: String(plainUser.fullName || ""),
         balance: plainUser.balance || { testnet: 0, locked: 0 },
+
+        // ✅ ADD THIS
+        avaxBalance,
+        usdBalance: plainUser.balance?.testnet || 0,
+        lastBalanceUpdate: Date.now(),
+
         authProvider: provider,
         lastLogin: Date.now()
     }, { merge: true });
 };
-
 // ==========================
 // 🔥 GOOGLE AUTH
 // ==========================

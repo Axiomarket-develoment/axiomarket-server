@@ -1,47 +1,60 @@
-
-const { fetchBinancePrice } = require("../services/price/binancePrice");
 const { fetchCoinGeckoPrice } = require("../services/price/coingeckoPrices");
-const { PRICE_FEEDS } = require("./priceFeeds");
 
-async function getUnifiedPrice(asset, fetchCurrentPriceFn) {
+// simple cache to prevent 429
+const priceCache = {};
+const CACHE_DURATION = 30 * 1000; // 30 seconds
+
+async function getUnifiedPrice(asset) {
     console.log(`🔄 Getting price for ${asset}...`);
 
-    // 1️⃣ Try Binance
-    try {
-        const price = await fetchBinancePrice(asset);
-        if (price) {
-            console.log(`✅ Price from Binance: ${price}`);
-            return { price, source: "BINANCE" };
-        }
-    } catch (err) {
-        console.warn("⚠️ Binance failed, falling back...");
+    const now = Date.now();
+
+    // 1️⃣ Return cached price if fresh
+    if (
+        priceCache[asset] &&
+        now - priceCache[asset].timestamp < CACHE_DURATION
+    ) {
+        return {
+            price: priceCache[asset].price,
+            source: "CACHE",
+        };
     }
 
-    // 2️⃣ Try CoinGecko
     try {
+        // 2️⃣ Fetch from CoinGecko
         const price = await fetchCoinGeckoPrice(asset);
-        if (price) {
-            // console.log(`✅ Price from CoinGecko: ${price}`);
-            return { price, source: "COINGECKO" };
+
+        if (!price) {
+            throw new Error("Invalid price response");
         }
+
+        // 3️⃣ Save to cache
+        priceCache[asset] = {
+            price,
+            timestamp: now,
+        };
+
+        console.log(`✅ Price from CoinGecko: ${price}`);
+
+        return {
+            price,
+            source: "COINGECKO",
+        };
+
     } catch (err) {
-        console.warn("⚠️ CoinGecko failed...");
-    }
+        console.warn(`⚠️ CoinGecko failed for ${asset}:`, err.message);
 
-    // 3️⃣ Try Chainlink (if feed exists)
-    if (PRICE_FEEDS[asset]) {
-        try {
-            const price = await fetchCurrentPriceFn(asset);
-            if (price) {
-                // console.log(`✅ Price from Chainlink: ${price}`);
-                return { price, source: "CHAINLINK" };
-            }
-        } catch (err) {
-            console.warn("⚠️ Chainlink failed, falling back...");
+        // 4️⃣ fallback to cached price if exists
+        if (priceCache[asset]) {
+            console.warn("⚠️ Using stale cached price");
+            return {
+                price: priceCache[asset].price,
+                source: "STALE_CACHE",
+            };
         }
-    }
 
-    throw new Error(`❌ Could not fetch price for ${asset}`);
+        throw new Error(`❌ Could not fetch price for ${asset}`);
+    }
 }
 
 module.exports = { getUnifiedPrice };

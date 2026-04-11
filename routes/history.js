@@ -1,76 +1,106 @@
 const express = require("express");
 const router = express.Router();
-const Order = require("../models/Order");
+const Position = require("../models/Position");
 const Market = require("../models/Market");
 const jwt = require("jsonwebtoken");
 
-// GET /user/get_history
 router.get("/get_history", async (req, res) => {
     try {
-        const token = req.headers.authorization?.split(" ")[1]; // Bearer TOKEN
-        if (!token) return res.status(401).json({ error: "Unauthorized" });
+        const token = req.headers.authorization?.split(" ")[1];
+
+        if (!token) {
+            return res.status(401).json({ error: "Unauthorized" });
+        }
 
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         const userId = decoded.id;
 
-        // Fetch all orders for the user
-        const orders = await Order.find({ userId })
-            .populate("marketId", "question marketType metadata result status")
+        const positions = await Position.find({ userId })
+            .populate("marketId")
             .sort({ createdAt: -1 });
 
-        // Compute total staked & potential win
-        const totalStaked = orders.reduce((sum, o) => sum + o.amount, 0);
-        const totalPotentialWin = orders.reduce((sum, o) => sum + o.amount * 2, 0); // 2x assumption
+        let totalStaked = 0;
+        let totalPotentialWin = 0;
 
-        // Transform orders into frontend-friendly history
-        const history = orders.map(o => {
-            const market = o.marketId;
+        const history = positions.map((p) => {
+            const market = p.marketId;
 
-            const outcomePicked = o.outcome;
-            const priceBought = o.price;
-            const amountStaked = o.amount;
-            const potentialWin = amountStaked * 2;
-
-            let userOutcome = "PENDING"; // default
+            let userOutcome = "PENDING";
             let marketResult = null;
             let marketStatus = "LIVE";
-            let image = null;
             let marketQuestion = "Unknown Market";
+            let image = null;
+            let potentialWin = 0;
 
             if (market) {
-                marketResult = market.result || null;
-                marketStatus = market.status || "LIVE";
-                image = market.metadata?.assetLogo || null;
                 marketQuestion = market.question || "Unknown Market";
+                marketStatus = market.status || "LIVE";
+                marketResult = market.result ?? null;
+                image = market.metadata?.assetLogo || null;
 
-                if (market.result) {
-                    userOutcome = market.result === outcomePicked ? "WIN" : "LOSE";
+                // ✅ FIND SUBMARKET
+                const subMarket = market.subMarkets.id(p.subMarketId);
+
+                if (subMarket) {
+                    const outcomes = subMarket.outcomes;
+
+                    const selected = outcomes.find(
+                        (o) =>
+                            o.label.toLowerCase() ===
+                            p.outcome.toLowerCase()
+                    );
+
+                    const totalPool = outcomes.reduce(
+                        (sum, o) => sum + (o.pool || 0),
+                        0
+                    );
+
+                    if (selected && selected.pool > 0) {
+                        const userShare = p.amount / selected.pool;
+                        potentialWin = userShare * totalPool;
+                    }
+                }
+
+                // ✅ RESOLVE RESULT
+                if (market.status === "SETTLED" && market.result) {
+                    userOutcome =
+                        market.result.toLowerCase() ===
+                        p.outcome.toLowerCase()
+                            ? "WIN"
+                            : "LOSE";
                 }
             }
 
+            totalStaked += p.amount || 0;
+            totalPotentialWin += potentialWin;
+
             return {
+                id: p._id,
+                marketId: market?._id,
+
                 marketQuestion,
-                outcomePicked,
-                priceBought,
-                amountStaked,
-                potentialWin,
+                outcomePicked: p.outcome || "Unknown",
+                amountStaked: p.amount || 0,
+                potentialWin: Number(potentialWin.toFixed(2)),
+
                 marketResult,
-                userOutcome,
                 marketStatus,
+                userOutcome,
                 image,
-                date: o.createdAt
+
+                date: p.createdAt,
             };
         });
 
-        res.json({
-            totalStaked,
-            totalPotentialWin,
-            history
+        return res.json({
+            success: true,
+            totalStaked: Number(totalStaked.toFixed(2)),
+            totalPotentialWin: Number(totalPotentialWin.toFixed(2)),
+            history,
         });
-
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: err.message });
+        console.error("get_history error:", err);
+        return res.status(500).json({ error: err.message });
     }
 });
 

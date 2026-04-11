@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 
 const conversationSchema = new mongoose.Schema({
-  market:                 {type: mongoose.Schema.Types.ObjectId, ref: "Market", required: true},
+  market:                 {type: mongoose.Schema.Types.ObjectId, ref: "Market"},
   participants:           [{ type: mongoose.Schema.Types.ObjectId, ref: "User"}],
 
   conv_type:              { type: String, default: "group" },

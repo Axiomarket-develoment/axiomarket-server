@@ -1,6 +1,6 @@
 const cron = require("node-cron");
 const Market = require("../models/Market");
-const { generateRandomMarket } = require("../services/market/marketGenerator");
+const { generateMarkets } = require("../services/market/marketGenerator");
 const Conversation = require("../models/conversation");
 const Message = require("../models/Message");
 const { fetchOutcomeFromOracle } = require("../utils/oracle");
@@ -9,102 +9,71 @@ const { adminDb } = require("../lib/firebaseAdmin");
 const Fill = require("../models/Fill");
 
 function startMarketCron() {
-  // ✅ Runs every 1 minute
-  cron.schedule("*/30 * * * * *", async () => {
 
+  // 🟢 5 MINUTE MARKETS
+  cron.schedule("*/5 * * * *", async () => {
+    console.log("⏱ Generating 5m markets...");
+    await generateMarkets(5);
+  });
+
+  // 🔵 15 MINUTE MARKETS
+  cron.schedule("*/15 * * * *", async () => {
+    console.log("⏱ Generating 15m markets...");
+    await generateMarkets(15);
+  });
+
+  // 🔴 END MARKETS (runs every minute)
+  cron.schedule("* * * * *", async () => {
     const now = new Date();
-    console.log("⏱ Running every 30 seconds:", now.toISOString());
 
-
-    // 0️⃣ Generate a new market
-    try {
-      await generateRandomMarket();
-    } catch (err) {
-      console.error("❌ Market generation failed:", err.message);
-    }
-
-    // 1️⃣ End LIVE markets whose endDate has passed
-    const liveMarkets = await Market.find({
+    const markets = await Market.find({
       status: "LIVE",
       endDate: { $lte: now }
     });
 
-    for (const market of liveMarkets) {
+    for (const market of markets) {
       market.status = "ENDED";
       await market.save();
-      console.log(`✅ Market ended: ${market.question}`);
-    }
 
-    // 2️⃣ Settle ENDED markets with participants
-    const endedMarkets = await Market.find({
+      console.log(`✅ Ended: ${market.question}`);
+    }
+  });
+
+  // 🟣 SETTLEMENT (every 5 minutes)
+  cron.schedule("*/5 * * * *", async () => {
+    console.log("🏁 Running settlement...");
+
+    const markets = await Market.find({
       status: "ENDED",
+      result: null
     });
 
-    for (const market of endedMarkets) {
+    for (const market of markets) {
       try {
-        // Only settle if there are participants
-
-
-        // Fetch outcome from oracle
         const outcome = await fetchOutcomeFromOracle(market);
 
-        // Call settleMarket which handles payouts & Firestore sync
+        if (!outcome) {
+          console.log("⚠️ No outcome, skipping");
+          continue;
+        }
+
         await settleMarket(market, outcome);
 
-        console.log(`🏁 Market ${market._id} settled with outcome: ${outcome}`);
-
+        console.log(`✅ Settled: ${market._id}`);
       } catch (err) {
-        console.error(`❌ Failed to settle market ${market._id}:`, err.message);
+        console.error("❌ Settlement failed:", err.message);
       }
     }
   });
 
-  // 🧹 CLEANUP CRON (every 30 mins)
-  cron.schedule("*/5 * * * *", async () => {
-    console.log("🧹 Running cleanup cron...");
 
-    try {
-      const settledMarkets = await Market.find({ status: "SETTLED" });
 
-      for (const market of settledMarkets) {
-        try {
-          const marketId = market._id.toString();
-          const convoId = market.conversationId?.toString();
-
-          console.log(`🗑 Cleaning market: ${marketId}`);
-
-          // Delete Mongoose data
-          if (convoId) {
-            await Message.deleteMany({ conversation_id: convoId });
-            await Conversation.findByIdAndDelete(convoId);
-          }
-          await Market.findByIdAndDelete(marketId);
-
-          // Delete Firestore data
-          await adminDb.collection("markets").doc(marketId).delete();
-
-          if (convoId) {
-            const messagesSnap = await adminDb
-              .collection("conversations")
-              .doc(convoId)
-              .collection("messages")
-              .get();
-
-            const batch = adminDb.batch();
-            messagesSnap.docs.forEach(doc => batch.delete(doc.ref));
-            batch.delete(adminDb.collection("conversations").doc(convoId));
-            await batch.commit();
-          }
-
-          console.log(`✅ Deleted market + conversation: ${marketId}`);
-        } catch (err) {
-          console.error(`❌ Failed cleanup for market ${market._id}:`, err.message);
-        }
-      }
-    } catch (err) {
-      console.error("❌ Cleanup cron failed:", err.message);
-    }
-  });
+  // every 15 minutes
+  // cron.schedule("*/15 * * * *", async () => {
+  //   console.log("💰 Running wallet sync...");
+  //   await syncWalletBalances();
+  // });
 }
+
 
 module.exports = { startMarketCron };

@@ -1,6 +1,6 @@
 // server/utils/oracle.js
 const { ethers } = require("ethers");
-const { PRICE_FEEDS } = require("./priceFeeds");
+const { getPrice } = require("../services/price/priceOracle");
 
 // Avalanche RPC
 const AVAX_RPC = process.env.AVAX_RPC || "https://api.avax.network/ext/bc/C/rpc";
@@ -45,26 +45,28 @@ async function fetchCurrentPrice(asset) {
 }
 
 // Fetch outcome (YES/NO) for a market
+
 async function fetchOutcomeFromOracle(market) {
-    // console.log(market)
+  const asset = market.metadata.asset;
 
-    // ✅ read from metadata instead of top-level
-    const { asset, targetPrice, direction } = market.metadata;
-    if (!asset || !targetPrice || !direction) {
-        throw new Error("❌ Market missing required fields (asset, targetPrice, direction)");
-    }
+  const price = getPrice(asset);
 
-    // 🔹 Lazy import to avoid circular dependency
-    const { getUnifiedPrice } = require("./priceRouer");
+  if (!price) {
+    console.log("❌ No cached price available");
+    return null;
+  }
 
-    const { price } = await getUnifiedPrice(asset, fetchCurrentPrice);
+  console.log(`💰 Using cached price: ${price}`);
 
-    console.log(`🎯 Market target price: $${targetPrice}, direction: ${direction}`);
+  const target = market.metadata.targetPrice;
+  const direction = market.metadata.direction;
 
-    if (direction === "UP") {
-        return price >= targetPrice ? "YES" : "NO";
-    } else {
-        return price <= targetPrice ? "YES" : "NO";
-    }
+  if (direction === "UP") {
+    return price >= target ? "YES" : "NO";
+  } else {
+    return price <= target ? "YES" : "NO";
+  }
 }
-module.exports = { fetchCurrentPrice, fetchOutcomeFromOracle, PRICE_FEEDS };
+
+
+module.exports = { fetchCurrentPrice, fetchOutcomeFromOracle  };

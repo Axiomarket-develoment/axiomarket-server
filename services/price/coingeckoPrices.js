@@ -1,17 +1,33 @@
 const axios = require("axios");
-const { TOKENS } = require("../../confiq/coinGeckoTokens");
+const { TOKENS } = require("../../confiq/assets");
+
+
+
+
+function normalizeToken(token) {
+  const map = {
+    avalanche: "avalanche-2",
+    shib: "shiba-inu",
+    doge: "dogecoin"
+  };
+
+  return map[token] || token;
+}
+
 
 // Fetch ONE token price
 async function fetchCoinGeckoPrice(token) {
     try {
-        if (!TOKENS.includes(token)) {
-            throw new Error(`Token ${token} not supported in CoinGecko list`);
+        const normalized = normalizeToken(token);
+
+        if (!TOKENS.includes(normalized)) {
+            throw new Error(`Token ${normalized} not supported in CoinGecko list`);
         }
 
-        const url = `https://api.coingecko.com/api/v3/simple/price?ids=${token}&vs_currencies=usd`;
+        const url = `https://api.coingecko.com/api/v3/simple/price?ids=${normalized}&vs_currencies=usd`;
         const response = await axios.get(url);
 
-        const price = response.data[token]?.usd;
+        const price = response.data[normalized]?.usd;
 
         if (!price) throw new Error("Price not found in response");
 
@@ -21,7 +37,6 @@ async function fetchCoinGeckoPrice(token) {
         return null;
     }
 }
-
 module.exports = { fetchCoinGeckoPrice };
 
 // 👇 Only runs when executed directly

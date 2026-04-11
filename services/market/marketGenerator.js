@@ -3,7 +3,8 @@ const Market = require("../../models/Market");
 const mongoose = require("mongoose");
 const { adminDb } = require("../../lib/firebaseAdmin"); // ✅ correct
 const conversation = require("../../models/conversation");
-const { SUPPORTED_ASSETS, BINANCE_SYMBOLS, TOKENS, PRICE_FEEDS } = require("../../utils/constants");
+const { TOKENS } = require("../../confiq/assets");
+const { getPrice } = require("../price/priceOracle");
 
 
 // console.log("SUPPORTED_ASSETS:", SUPPORTED_ASSETS);
@@ -13,6 +14,16 @@ const TEST_MODE = true;
 
 function getDirectionWord(direction) {
   return direction === "UP" ? "up" : "down";
+}
+
+function normalizeToken(token) {
+  const map = {
+    avalanche: "avalanche-2",
+    shib: "shiba-inu",
+    doge: "dogecoin"
+  };
+
+  return map[token] || token;
 }
 
 function getNextRoundTime(minutes) {
@@ -26,11 +37,18 @@ function getNextRoundTime(minutes) {
 
 
 function getSymbol(asset) {
-  return BINANCE_SYMBOLS[asset]
-    ? `$${BINANCE_SYMBOLS[asset].replace("USDT", "")}`
-    : `$${asset.replace(/-/g, "").toUpperCase()}`;
-}
+  const map = {
+    bitcoin: "BTC",
+    ethereum: "ETH",
+    binancecoin: "BNB",
+    solana: "SOL",
+    "avalanche-2": "AVAX",
+    sui: "SUI",
+    dogecoin: "DOGE"
+  };
 
+  return `$${map[asset] || asset.toUpperCase()}`;
+}
 
 function formatDuration(minutes) {
   if (minutes >= 60) {
@@ -40,181 +58,228 @@ function formatDuration(minutes) {
   return `${minutes}m`;
 }
 
-async function generateRandomMarket() {
+async function createMarket({
+  asset,
+  question,
+  currentPrice,
+  targetPrice,
+  direction,
+  durationMinutes,
+  endDate
+}) {
   try {
-    const now = new Date();
+    // 1️⃣ Create conversation first
+    const convo = await conversation.create({
+      market: null,
+      participants: [],
+      conv_type: "group"
+    });
 
-    // Skip if too many live markets
-    const liveCount = await Market.countDocuments({ status: "LIVE" });
-    if (liveCount >= 10) return;
-
-    // Pick random asset
-    const FETCHABLE_ASSETS = SUPPORTED_ASSETS.filter(
-      (asset) =>
-        BINANCE_SYMBOLS[asset] ||
-        TOKENS.includes(asset) ||
-        (PRICE_FEEDS[asset] && PRICE_FEEDS[asset] !== null)
-    );
-
-    const asset = FETCHABLE_ASSETS[Math.floor(Math.random() * FETCHABLE_ASSETS.length)];
-    // Get price
-
-    const { getUnifiedPrice } = require("../../utils/priceRouer");
-    const { fetchCurrentPrice } = require("../../utils/oracle");
-
-    const { price: currentPrice } = await getUnifiedPrice(asset, fetchCurrentPrice);
-
-    // ✅ Determine a dynamic end time
-    let minDurationMinutes, maxDurationMinutes;
-
-    // ✅ Determine a dynamic end time
-    const possibleDurations = [5,15]; // only 5 or 15 min
-
-
-    // Pick a duration
-    const durationMinutes = possibleDurations[Math.floor(Math.random() * possibleDurations.length)];
-
-    // Compute precise end time
-    const endDate = getNextRoundTime(durationMinutes);
-    // Round to exact minute
-    endDate.setMilliseconds(0);
-    endDate.setSeconds(0);
-
-    // Determine market direction and target price
-    const direction = Math.random() > 0.5 ? "UP" : "DOWN";
-    let percentMove;
-
-    if (TEST_MODE) {
-      percentMove = Math.random() * 0.1 + 0.5; // 0.1% → 0.6%
-    } else {
-      percentMove = Math.random() * 2 + 0.2; // 0.2% → 2.2%
+    if (!convo?._id) {
+      throw new Error("Conversation creation failed");
     }
-    let targetPrice =
-      direction === "UP"
-        ? currentPrice * (1 + percentMove / 100)
-        : currentPrice * (1 - percentMove / 100);
 
-    targetPrice =
-      currentPrice < 1
-        ? Number(targetPrice.toFixed(8))
-        : Number(targetPrice.toFixed(2));
+    // 2️⃣ Create base subMarkets (DEFAULT TEMPLATE)
+    const baseSubMarkets = [
+      {
+        question,
+        marketType: "CRYPTO",
+        outcomes: [
+          { label: "Yes", result: false, odds: 2.0, pool: 0, liquidity: 0, volume: 0, count: 0 },
+          { label: "No", result: false, odds: 2.0, pool: 0, liquidity: 0, volume: 0, count: 0 }
+        ],
+        status: "LIVE",
+        totalVolume: 0,
+        tradeCount: 0
+      }
+    ];
 
-    // Pick a question template
-    const SHORT_TERM_TEMPLATES = QUESTION_TEMPLATES.filter(
-      (q) =>
-        q.includes("{duration}") ||
-        q.includes("{percent}") ||
-        q.includes("{directionWord}")
-    );
-
-    const template =
-      SHORT_TERM_TEMPLATES[
-      Math.floor(Math.random() * SHORT_TERM_TEMPLATES.length)
-      ];
-
-    // Replace placeholders dynamically
-    const question = template
-      .replace("{asset}", asset)
-      .replace("{assetSymbol}", getSymbol(asset))
-      .replace("{directionWord}", getDirectionWord(direction))
-      .replace("{duration}", formatDuration(durationMinutes))
-      .replace("{percent}", percentMove.toFixed(2))
-      .replace("{target}", targetPrice)
-      .replace(
-        "{endTime}",
-        endDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-      );
-
-    // ✅ CREATE MARKET
+    // 3️⃣ Create market (MONGO)
     const market = new Market({
       question,
       marketType: "CRYPTO",
-      subMarkets: [
-        {
-          question,
-          marketType: "CRYPTO",
-          outcomes: [
-            { label: "Yes", result: false, odds: 2.0, pool: 0, liquidity: 0, volume: 0, count: 0 },
-            { label: "No", result: false, odds: 2.0, pool: 0, liquidity: 0, volume: 0, count: 0 },
-          ],
-          tradeCount: 0,
-          totalVolume: 0,
-          status: "LIVE",
-          resolution: {
-            method: "MANUAL",
-            source: "SYSTEM",
-            value: null,
-          },
-        },
-      ],
+      conversationId: convo._id,
+
+      subMarkets: baseSubMarkets,
+
       metadata: {
         asset,
-        assetLogo: null,
-        chartImage: null,
         startPrice: currentPrice,
         targetPrice,
         assetSymbol: getSymbol(asset),
-        direction,
+        direction
       },
+
       startDate: new Date(endDate.getTime() - durationMinutes * 60000),
       endDate,
       durationMinutes,
-      status: "LIVE",
+      status: "LIVE"
     });
 
     const savedMarket = await market.save();
-    // console.log(`🔥 Market Created: ${question}`);
 
-    const convo = await conversation.create({
-      market: savedMarket._id,
-      participants: [],
-      conv_type: "group"
-    })
+    if (!savedMarket?._id) {
+      throw new Error("Market save failed");
+    }
 
-    savedMarket.conversationId = convo._id
-    await savedMarket.save()
+    // 4️⃣ Link conversation back to market
+    await conversation.findByIdAndUpdate(convo._id, {
+      market: savedMarket._id
+    });
 
-    // 🔥 Push to Firebase
+    const plainMarket = savedMarket.toObject();
+
+    // 5️⃣ FIRESTORE SAFE SUBMARKETS (FULL NORMALIZATION)
+    const firestoreSubMarkets = plainMarket.subMarkets.map(sub => {
+      const outcomes = (sub.outcomes || []).map(o => ({
+        label: o.label || "",
+        result: o.result ?? null,
+        odds: Number(o.odds ?? 2),
+        pool: Number(o.pool ?? 0),
+        liquidity: Number(o.liquidity ?? 0),
+        volume: Number(o.volume ?? 0),
+        count: Number(o.count ?? 0),
+      }));
+
+      const totalVolume = outcomes.reduce(
+        (acc, o) => acc + Number(o.volume || 0),
+        0
+      );
+
+      const tradeCount = outcomes.reduce(
+        (acc, o) => acc + Number(o.count || 0),
+        0
+      );
+
+      return {
+        id: sub._id?.toString(),
+        question: sub.question || "",
+        marketType: sub.marketType || "CRYPTO",
+        status: sub.status || "LIVE",
+
+        outcomes,
+
+        totalVolume,
+        tradeCount,
+
+        resolution: sub.resolution || null,
+      };
+    });
+
+    // 6️⃣ FIRESTORE PAYLOAD
+    const firestorePayload = {
+      id: plainMarket._id.toString(),
+      question: plainMarket.question,
+      marketType: plainMarket.marketType,
+
+      conversationId: convo._id.toString(),
+
+      metadata: {
+        asset: plainMarket.metadata.asset,
+        startPrice: plainMarket.metadata.startPrice,
+        targetPrice: plainMarket.metadata.targetPrice,
+        assetSymbol: plainMarket.metadata.assetSymbol,
+        direction: plainMarket.metadata.direction
+      },
+
+      currentPrice: plainMarket.metadata.startPrice,
+      targetPrice: plainMarket.metadata.targetPrice,
+      direction: plainMarket.metadata.direction,
+
+      totalVolume: plainMarket.totalVolume || 0,
+      tradeCount: plainMarket.tradeCount || 0,
+      status: plainMarket.status,
+
+      startDate: plainMarket.startDate.getTime(),
+      endDate: plainMarket.endDate.getTime(),
+      durationMinutes: plainMarket.durationMinutes,
+
+      subMarkets: firestoreSubMarkets,
+
+      createdAt: Date.now()
+    };
+
+    // 7️⃣ SAVE TO FIRESTORE
     await adminDb
       .collection("markets")
-      .doc(savedMarket._id.toString())
-      .set({
-        id: savedMarket._id.toString(),
-        question: savedMarket.question,
-        marketType: savedMarket.marketType,
-
-        conversationId: convo._id.toString(),
-
-        metadata: JSON.parse(JSON.stringify(savedMarket.metadata)),
-        currentPrice: savedMarket.metadata.startPrice,
-        targetPrice: savedMarket.metadata.targetPrice,
-        direction: savedMarket.metadata.direction,
-        totalVolume: savedMarket.totalVolume,
-        tradeCount: savedMarket.tradeCount,
-        status: savedMarket.status,
-        startDate: savedMarket.startDate.getTime(),
-        endDate: savedMarket.endDate.getTime(),
-        durationMinutes: savedMarket.durationMinutes,
-        subMarkets: savedMarket.subMarkets.map((sub) =>
-          JSON.parse(
-            JSON.stringify({
-              id: sub._id.toString(),
-              question: sub.question,
-              outcomes: sub.outcomes,
-              tradeCount: sub.tradeCount,
-              totalVolume: sub.totalVolume,
-              status: sub.status,
-            })
-          )
-        ),
-        createdAt: Date.now(),
-      });
-    console.log("⚡ Synced to Firebase");
+      .doc(plainMarket._id.toString())
+      .set(firestorePayload);
 
     return savedMarket;
+
   } catch (err) {
-    console.error("❌ Market generation failed:", err);
+    console.error("❌ createMarket failed:", err.message);
+    throw err;
   }
 }
 
-module.exports = { generateRandomMarket, TEST_MODE };
+
+async function generateMarkets(durationMinutes) {
+  try {
+    const now = new Date();
+    const endDate = getNextRoundTime(durationMinutes);
+
+    const jobs = [];
+
+    for (const asset of TOKENS) {
+      const currentPrice = getPrice(asset);
+
+      if (!currentPrice) {
+        console.log(`⚠️ No price for ${asset}, skipping`);
+        continue;
+      }
+
+      for (const template of QUESTION_TEMPLATES) {
+
+        const direction = Math.random() > 0.5 ? "UP" : "DOWN";
+
+        const percentMove = TEST_MODE
+          ? Math.random() * 0.1 + 0.5
+          : Math.random() * 2 + 0.2;
+
+        let targetPrice =
+          direction === "UP"
+            ? currentPrice * (1 + percentMove / 100)
+            : currentPrice * (1 - percentMove / 100);
+
+        targetPrice =
+          currentPrice < 1
+            ? Number(targetPrice.toFixed(8))
+            : Number(targetPrice.toFixed(2));
+
+        const question = template
+          .replace("{asset}", asset)
+          .replace("{assetSymbol}", getSymbol(asset))
+          .replace("{directionWord}", getDirectionWord(direction))
+          .replace("{duration}", formatDuration(durationMinutes))
+          .replace("{percent}", percentMove.toFixed(2))
+          .replace("{target}", targetPrice)
+          .replace(
+            "{endTime}",
+            endDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          );
+
+        // 👇 PUSH JOB (no await yet)
+        jobs.push(createMarket({
+          asset,
+          question,
+          currentPrice,
+          targetPrice,
+          direction,
+          durationMinutes,
+          endDate
+        }));
+      }
+    }
+
+    // 🚀 RUN ALL AT ONCE
+    await Promise.all(jobs);
+
+    console.log(`🔥 ${jobs.length} markets created at same time`);
+  } catch (err) {
+    console.error("❌ Bulk generation failed:", err.message);
+  }
+}
+
+
+module.exports = { generateMarkets, TEST_MODE };

@@ -6,6 +6,7 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const Order = require("../models/Order");
 const Position = require("../models/Position");
+const axios = require("axios")
 const { adminDb } = require("../lib/firebaseAdmin");
 const Fill = require("../models/Fill");
 const { TOKEN_CHART_SYMBOLS } = require("../confiq/assets");
@@ -65,45 +66,73 @@ router.get("/markets", async (req, res) => {
  */
 router.get("/chart/:token", async (req, res) => {
     const { token } = req.params;
-    const symbol = TOKEN_CHART_SYMBOLS[token.toLowerCase()];
+    const { interval = "5m" } = req.query;
+
+    const symbolMap = {
+        bitcoin: "BTC",
+        ethereum: "ETH",
+        solana: "SOL",
+        binancecoin: "BNB",
+        "avalanche-2": "AVAX",
+        dogecoin: "DOGE",
+        "shiba-inu": "SHIB"
+    };
+
+    const symbol = symbolMap[token.toLowerCase()];
+
+    if (!symbol) {
+        return res.status(400).json({ error: "Unsupported token" });
+    }
+
+    // 🔥 Map intervals → CryptoCompare endpoints
+    const intervalMap = {
+        "1m": { endpoint: "histominute", aggregate: 1, limit: 500 },
+        "5m": { endpoint: "histominute", aggregate: 5, limit: 500 },
+        "15m": { endpoint: "histominute", aggregate: 15, limit: 500 },
+        "1h": { endpoint: "histohour", aggregate: 1, limit: 200 },
+
+        // fallback mapping
+        "1d": { endpoint: "histoday", aggregate: 1, limit: 200 },
+        "1w": { endpoint: "histoday", aggregate: 7, limit: 200 },
+        "max": { endpoint: "histoday", aggregate: 30, limit: 200 },
+    };
+
+    const config = intervalMap[interval] || intervalMap["5m"];
 
     try {
-        if (!symbol) {
-            return res.status(400).json({ error: `No chart available for token: ${token}` });
-        }
+        const url = `https://min-api.cryptocompare.com/data/v2/${config.endpoint}?fsym=${symbol}&tsym=USD&limit=${config.limit}&aggregate=${config.aggregate}`;
 
-        const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=5m&limit=2016`;
-        const response = await fetch(url, {
-            headers: {
-                "User-Agent": "Mozilla/5.0",
-            },
+        const response = await axios.get(url);
+
+        const data = response.data?.Data?.Data || [];
+
+        const candles = data.map(c => ({
+            time: c.time * 1000,
+            open: c.open,
+            high: c.high,
+            low: c.low,
+            close: c.close
+        }));
+
+        return res.json({
+            source: "cryptocompare",
+            interval,
+            candles
         });
 
-        if (!response.ok) {
-            const text = await response.text();
-            console.error("Binance API error:", response.status, text);
-            return res.status(response.status).json({ error: "Failed to fetch from Binance" });
-        }
-
-        const data = await response.json();
-
-        if (!Array.isArray(data)) {
-            return res.status(500).json({ error: "Invalid data from Binance" });
-        }
-
-        const prices = data.map((kline) => [
-            kline[0],
-            parseFloat(kline[4]),
-        ]);
-
-        return res.json({ prices });
-
     } catch (err) {
-        console.error(err);
-        return res.status(500).json({ error: err.message });
+        console.error("❌ Chart error FULL:", {
+            message: err.message,
+            response: err.response?.data,
+            status: err.response?.status,
+        });
+
+        return res.status(500).json({
+            error: "Chart fetch failed",
+            details: err.response?.data || err.message
+        });
     }
 });
-
 
 router.post("/user_enter_market", async (req, res) => {
     try {
