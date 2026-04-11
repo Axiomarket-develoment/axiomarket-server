@@ -11,6 +11,8 @@ const PositionSchema = new mongoose.Schema({
 
   // shares:               { type: Number, required: true },
   amount:               { type: Number, required: true }
-});
+}, 
+      { timestamps: true }
+);
 
 module.exports = mongoose.model("Position", PositionSchema);

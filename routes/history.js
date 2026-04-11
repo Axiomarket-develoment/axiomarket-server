@@ -65,7 +65,7 @@ router.get("/get_history", async (req, res) => {
                 if (market.status === "SETTLED" && market.result) {
                     userOutcome =
                         market.result.toLowerCase() ===
-                        p.outcome.toLowerCase()
+                            p.outcome.toLowerCase()
                             ? "WIN"
                             : "LOSE";
                 }
@@ -88,7 +88,7 @@ router.get("/get_history", async (req, res) => {
                 userOutcome,
                 image,
 
-                date: p.createdAt,
+                date: p.createdAt || new Date(p._id.getTimestamp()),
             };
         });
 
