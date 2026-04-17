@@ -18,7 +18,7 @@ const { startMarketCron } = require("./crons/marketCron");
 const { startOracle } = require("./services/price/priceOracle");
 const { syncWalletBalances } = require("./services/wallet/syncWalletBalance");
 
-// ---------------- DNS Config ----------------
+// // ---------------- DNS Config ----------------
 // dnsPromises.setServers(["1.1.1.1", "8.8.8.8"]);
 // dns.setDefaultResultOrder("ipv4first");
 
@@ -81,7 +81,7 @@ mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 15000 })
 
     setInterval(() => {
       syncWalletBalances();
-    }, 60000);
+    }, 10000);
   })
   .catch((err) => {
     console.error("❌ FULL Mongo Error:", err);

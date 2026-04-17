@@ -141,10 +141,14 @@ router.post("/user_enter_market", async (req, res) => {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         const userId = decoded.id;
 
+
         const user = await User.findById(userId).select("-password");
         const market = await Market.findById(marketId);
         const subMarket = market?.subMarkets.id(subMarketId);
 
+        // console.log("UserId" , userId)
+        // console.log("UserId" , subMarket)
+        // console.log("UserId" , market)
         if (!user || !market || !subMarket) {
             return res.status(404).json({ error: "Invalid data" });
         }
@@ -165,6 +169,48 @@ router.post("/user_enter_market", async (req, res) => {
 
         selectedOutcome.pool += amount;
         selectedOutcome.count += 1;
+        selectedOutcome.volume += amount;      // ✅ ADD THIS
+        selectedOutcome.liquidity += amount;
+
+        const totalPool = subMarket.outcomes.reduce((a, o) => a + o.pool, 0);
+
+        const MIN_PERCENT = 20;
+
+        // 1. raw percentages
+        let raw = subMarket.outcomes.map(o =>
+            totalPool === 0 ? 50 : (o.pool / totalPool) * 100
+        );
+
+        // 2. apply minimum floor
+        let adjusted = raw.map(p => Math.max(p, MIN_PERCENT));
+
+        // 3. fix overflow if sum > 100
+        let sum = adjusted.reduce((a, b) => a + b, 0);
+
+        if (sum > 100) {
+            const excess = sum - 100;
+
+            // only reduce those above MIN_PERCENT
+            const flexibleIndexes = adjusted
+                .map((p, i) => (p > MIN_PERCENT ? i : -1))
+                .filter(i => i !== -1);
+
+            let flexibleSum = flexibleIndexes.reduce((a, i) => a + adjusted[i], 0);
+
+            for (let i of flexibleIndexes) {
+                const share = adjusted[i] / flexibleSum;
+                adjusted[i] -= share * excess;
+            }
+        }
+
+        // 4. fix floating errors → normalize again
+        const finalSum = adjusted.reduce((a, b) => a + b, 0);
+        adjusted = adjusted.map(p => (p / finalSum) * 100);
+
+        // 5. assign
+        subMarket.outcomes.forEach((o, i) => {
+            o.percentage = Number(adjusted[i].toFixed(2));
+        });
 
         // ✅ Save position
         const position = await Position.create({
@@ -179,6 +225,9 @@ router.post("/user_enter_market", async (req, res) => {
         subMarket.tradeCount += 1;
         subMarket.totalVolume += amount;
 
+        market.tradeCount = (market.tradeCount || 0) + 1;   // ✅ ADD
+        market.totalVolume = (market.totalVolume || 0) + amount; // ✅ ADD
+
         // 🔹 Round user balances
         user.balance.testnet = Number(user.balance.testnet.toFixed(2));
         user.balance.locked = Number(user.balance.locked.toFixed(2));
@@ -188,28 +237,28 @@ router.post("/user_enter_market", async (req, res) => {
 
         // 🔹 Sync updated market to Firestore
         const marketDoc = adminDb.collection("markets").doc(market._id.toString());
-        await marketDoc.update({
+        await marketDoc.set({
             subMarkets: market.subMarkets.map(sub => ({
                 id: sub._id.toString(),
                 question: sub.question || null,
                 outcomes: sub.outcomes.map(o => ({
-                    label: o.label || null,
-                    pool: o.pool || 0,
-                    count: o.count || 0,
-                    odds: o.odds || 2.0,
+                    label: o.label,
+                    pool: Number(o.pool || 0),
+                    count: Number(o.count || 0),
+                    odds: Number(o.odds || 2),
+                    volume: Number(o.volume || 0),
+                    liquidity: Number(o.liquidity || 0),
                     result: o.result ?? null,
-                    volume: o.volume || 0,
-                    liquidity: o.liquidity || 0
+                    percentage: Number(o.percentage || 50)
                 })),
                 tradeCount: sub.tradeCount || 0,
                 totalVolume: sub.totalVolume || 0,
                 status: sub.status || "LIVE",
-                targetPrice: sub.targetPrice ?? null
             })),
             totalVolume: market.totalVolume || 0,
             tradeCount: market.tradeCount || 0,
             status: market.status || "LIVE"
-        });
+        }, { merge: true });
 
         // 🔹 **Sync user balance to Firestore**
         await syncUserBalance(user);

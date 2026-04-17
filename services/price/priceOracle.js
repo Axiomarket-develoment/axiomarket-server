@@ -39,16 +39,17 @@ function updateCache(data) {
     for (const asset of ASSETS) {
         const price = data?.[asset]?.usd;
 
-        if (price) {
+        if (typeof price === "number") {
             priceCache.set(asset, {
                 price,
                 timestamp: Date.now()
             });
+        } else {
+            console.log(`⚠️ Missing price for ${asset}`);
         }
     }
 
-    console.log("📦 Cache updated");
-    console.log(priceCache);
+    console.log("📦 Cache updated size:", priceCache.size);
 }
 
 async function fetchPrices() {
@@ -76,7 +77,6 @@ async function fetchPrices() {
             binancecoin: "bnb-binance-coin",
             "avalanche-2": "avax-avalanche",
             dogecoin: "doge-dogecoin",
-            "shiba-inu": "shib-shiba-inu"
         };
 
         const prices = {};
@@ -131,10 +131,14 @@ async function fetchPrices() {
     }
 }
 
-function startOracle() {
+async function startOracle() {
     console.log("🚀 Oracle started");
 
-    fetchPrices(); // initial
+    try {
+        await fetchPrices(); // IMPORTANT: wait for first success
+    } catch (e) {
+        console.log("Initial fetch failed, retrying...");
+    }
 
     setInterval(fetchPrices, INTERVAL);
 }
@@ -142,18 +146,19 @@ function startOracle() {
 function getPrice(asset) {
     const data = priceCache.get(asset);
 
-    if (!data) return null;
+    if (!data || typeof data.price !== "number") {
+        console.log(`❌ Cache miss: ${asset}`);
+        return null;
+    }
 
-    const isStale = Date.now() - data.timestamp > 60000; // 60s
+    const age = Date.now() - data.timestamp;
 
-    if (isStale) {
-        console.log(`⚠️ Stale price for ${asset}`);
-        return data.price;
+    if (age > 120000) {
+        console.log(`⚠️ Stale price: ${asset}`);
     }
 
     return data.price;
 }
-
 module.exports = {
     startOracle,
     getPrice

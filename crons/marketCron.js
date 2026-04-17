@@ -40,7 +40,7 @@ function startMarketCron() {
   });
 
   // 🟣 SETTLEMENT (every 5 minutes)
-  cron.schedule("*/5 * * * *", async () => {
+  cron.schedule("*/2 * * * *", async () => {
     console.log("🏁 Running settlement...");
 
     const markets = await Market.find({

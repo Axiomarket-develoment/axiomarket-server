@@ -11,7 +11,8 @@ const SubMarketSchema = new mongoose.Schema({
                                 liquidity: {type: Number , default: 0},
                                 volume: {type: Number , default: 0},
                                 count: {type: Number , default: 0},
-                                pool: { type: Number, default: 0 }
+                                pool: { type: Number, default: 0 },
+                                percentage: { type: Number, default: 50 }
                             }
                          ],
   marketType:            { type: String, enum: ["CRYPTO", "SOCIAL", "SPORT"] },
