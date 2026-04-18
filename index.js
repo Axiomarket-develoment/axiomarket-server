@@ -30,7 +30,6 @@ const httpServer = createServer(app);
 
 HttpServer(httpServer);
 
-
 const PORT = process.env.PORT || 7000;
 const MONGO_URI = process.env.MONGO_URI;
 
@@ -53,6 +52,8 @@ app.use(cors({
   credentials: true,
 }));
 
+
+
 // ---------------- Session ----------------
 // MUST come before passport.initialize()
 app.use(session({
@@ -66,6 +67,8 @@ app.use(session({
     sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
   }
 }));
+
+
 
 // ---------------- Passport ----------------
 app.use(passport.initialize());
@@ -98,6 +101,7 @@ app.use("/user_chat", require("./routes/chat"));
 app.use("/user_waitlist", require("./routes/waitlist"));
 app.use("/user_history", require("./routes/history"));
 app.use("/ai", require("./routes/ai"));
+app.use("/user_ambassador", require("./routes/ambassador"));
 
 // Default route
 app.get("/", (req, res) => {

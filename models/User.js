@@ -16,6 +16,14 @@ const UserSchema = new mongoose.Schema({
                           locked:  { type: Number, default: 0 }
                         },
   savedMarket:          {type: mongoose.Schema.Types.ObjectId, ref: "Market" },
+
+  referredBy:          {type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  isAmbassador:         {type: Boolean, default: false},
+  referralCode:         {type: String, unique: true, sparse: true},
+  totalReferrals:       {type: Number, default: 0},
+  totalEarnings:        {type: Number, default: 0},
+
+
   authProvider:         { type: String, enum: ["google", "email", "apple", "twitter"], default: "email" },
   twitterId:            { type: String ,unique: true, sparse: true}, 
   fullName:             { type: String }, 
