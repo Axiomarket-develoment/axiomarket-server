@@ -17,7 +17,7 @@ const UserSchema = new mongoose.Schema({
                         },
   savedMarket:          {type: mongoose.Schema.Types.ObjectId, ref: "Market" },
 
-  referredBy:          {type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  referredBy:           {type: mongoose.Schema.Types.ObjectId, ref: "User" },
   isAmbassador:         {type: Boolean, default: false},
   referralCode:         {type: String, unique: true, sparse: true},
   totalReferrals:       {type: Number, default: 0},

@@ -16,7 +16,7 @@ Router.get("/ambassador_stats", async (req, res) => {
             stats = await Stats.create({ ambassadorSlots: 150 });
         }
 
-        const percent = stats.ambassadorSlots <= 50 ? 5 : 10;
+        const percent = stats.ambassadorSlots <= 100 ? 5 : 10;
 
         return res.status(200).json({
             success: true,
@@ -57,7 +57,7 @@ Router.post("/ambassador_register", async (req, res) => {
         }
 
         // 🔥 derive percent dynamically
-        const percent = stats.ambassadorSlots <= 50 ? 5 : 10;
+        const percent = stats.ambassadorSlots <= 100 ? 5 : 10;
 
         // decrement slot AFTER validation
         stats.ambassadorSlots -= 1;
