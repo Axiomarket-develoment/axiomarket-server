@@ -8,32 +8,58 @@ const ASSETS = TOKENS;
 
 const INTERVAL = 15000; // 15 seconds
 
-function buildSyntheticChart(asset, interval = 300000, limit = 200) {
-    const prices = priceCache.get(asset);
 
-    if (!prices) return [];
+
+function buildSyntheticChart(asset, interval = 300000, limit = 120) {
+    const key = `${asset}-${interval}`;
+
+    const cached = chartCache.get(key);
+
+    // 👉 return same chart if it exists and is fresh
+    if (cached && Date.now() - cached.timestamp < interval) {
+        return cached.data;
+    }
+
+    const priceData = priceCache.get(asset);
+    if (!priceData) return [];
 
     const now = Date.now();
-
     const candles = [];
 
-    let last = prices.price;
+    let lastClose = priceData.price;
 
     for (let i = limit; i >= 0; i--) {
         const time = now - i * interval;
 
-        // simulate small volatility around oracle price
-        const variation = (Math.random() - 0.5) * 0.002; // 0.2%
-        const price = last * (1 + variation);
+        const open = lastClose;
 
-        candles.push([time, Number(price.toFixed(6))]);
+        // ⚠️ reduce randomness (important)
+        const change = (Math.random() - 0.5) * 0.002; // 0.2% not 1%
+        const close = open * (1 + change);
 
-        last = price;
+        const high = Math.max(open, close);
+        const low = Math.min(open, close);
+
+        candles.push({
+            time,
+            open,
+            high,
+            low,
+            close
+        });
+
+        lastClose = close;
     }
+
+    const result = {
+        data: candles,
+        timestamp: Date.now()
+    };
+
+    chartCache.set(key, result);
 
     return candles;
 }
-
 
 function updateCache(data) {
     for (const asset of ASSETS) {
@@ -161,5 +187,6 @@ function getPrice(asset) {
 }
 module.exports = {
     startOracle,
-    getPrice
+    getPrice,
+    buildSyntheticChart
 };

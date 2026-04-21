@@ -13,7 +13,191 @@ const { TOKEN_CHART_SYMBOLS } = require("../confiq/assets");
 const syncUserBalance = require("../functions/syncUserBalance");
 
 
+async function fetchBinance(symbol, interval) {
+    try {
+        const map = {
+            "1m": "1m",
+            "5m": "5m",
+            "15m": "15m",
+            "1h": "1h",
+            "1d": "1d",
+        };
 
+        const binanceInterval = map[interval] || "5m";
+
+        const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}USDT&interval=${binanceInterval}&limit=200`;
+
+        console.log("🌐 Binance URL:", url);
+
+        const res = await axios.get(url);
+
+        return res.data.map(c => ({
+            time: c[0],
+            open: parseFloat(c[1]),
+            high: parseFloat(c[2]),
+            low: parseFloat(c[3]),
+            close: parseFloat(c[4]),
+        }));
+
+    } catch (e) {
+        console.log("❌ Binance ERROR:", e.message);
+        return null;
+    }
+}
+
+
+
+async function fetchCryptoCompare(symbol, interval, limit, aggregate) {
+    try {
+
+        console.log("📌 CryptoCompare params:", {
+            symbol,
+            interval,
+            limit,
+            aggregate
+        });
+
+        if (!limit || !aggregate) {
+            console.log("❌ INVALID PARAMS → skipping CryptoCompare");
+            return null;
+        }
+
+        const url = `https://min-api.cryptocompare.com/data/v2/histominute?fsym=${symbol}&tsym=USD&limit=${limit}&aggregate=${aggregate}`;
+
+        console.log("🌐 CryptoCompare URL:", url);
+
+        const res = await axios.get(url);
+
+        if (res.data.Response !== "Success") {
+            console.log("❌ CryptoCompare FAILED:", res.data.Message);
+            return null;
+        }
+
+        return res.data.Data.Data.map(c => ({
+            time: c.time * 1000,
+            open: c.open,
+            high: c.high,
+            low: c.low,
+            close: c.close
+        }));
+
+    } catch (e) {
+        console.log("❌ CryptoCompare ERROR:", e.message);
+        return null;
+    }
+}
+
+async function fetchCoinAPI(symbol) {
+    try {
+        const url = `https://rest.coinapi.io/v1/ohlcv/${symbol}/USD/latest?period_id=5MIN&limit=100`;
+
+        console.log("🌐 CoinAPI URL:", url);
+
+        const res = await axios.get(url, {
+            headers: {
+                "X-CoinAPI-Key": process.env.COINAPI_KEY
+            }
+        });
+
+        console.log("📦 CoinAPI SUCCESS");
+
+        return res.data.map(c => ({
+            time: new Date(c.time_period_start).getTime(),
+            open: c.price_open,
+            high: c.price_high,
+            low: c.price_low,
+            close: c.price_close
+        }));
+
+    } catch (e) {
+        console.log("❌ CoinAPI ERROR:", e.response?.data || e.message);
+        return null;
+    }
+}
+
+
+async function fetchTwelveData(symbol) {
+    try {
+        const url = `https://api.twelvedata.com/time_series?symbol=${symbol}/USD&interval=5min&outputsize=100&apikey=${process.env.TWELVEDATA_KEY}`;
+
+        const res = await axios.get(url);
+
+        if (!res.data.values) return null;
+
+        return res.data.values.reverse().map(c => ({
+            time: new Date(c.datetime).getTime(),
+            open: parseFloat(c.open),
+            high: parseFloat(c.high),
+            low: parseFloat(c.low),
+            close: parseFloat(c.close)
+        }));
+
+    } catch (e) {
+        return null;
+    }
+}
+
+async function getCandles(symbol, interval) {
+    console.log("📊 getCandles called:", { symbol, interval });
+
+    let result = null;
+    let source = "none";
+
+    // 1. BINANCE (PRIMARY)
+    result = await fetchBinance(symbol, interval);
+    console.log("🟡 Binance result:", result ? "SUCCESS" : "FAIL");
+
+    if (result) source = "binance";
+
+    // 2. CryptoCompare
+    if (!result) {
+        const configMap = {
+            "1m": { limit: 200, aggregate: 1 },
+            "5m": { limit: 200, aggregate: 5 },
+            "15m": { limit: 200, aggregate: 15 },
+            "1h": { limit: 200, aggregate: 60 },
+        };
+
+        const config = configMap[interval] || configMap["5m"];
+
+        console.log("⚙️ CryptoCompare config:", config);
+
+        result = await fetchCryptoCompare(
+            symbol,
+            interval,
+            config.limit,
+            config.aggregate
+        );
+
+        console.log("🟡 CryptoCompare result:", result ? "SUCCESS" : "FAIL");
+
+        if (result) source = "cryptocompare";
+    }
+
+    // 3. CoinAPI
+    if (!result) {
+        result = await fetchCoinAPI(symbol);
+        console.log("🟡 CoinAPI result:", result ? "SUCCESS" : "FAIL");
+
+        if (result) source = "coinapi";
+    }
+
+    // 4. TwelveData
+    if (!result) {
+        result = await fetchTwelveData(symbol);
+        console.log("🟡 TwelveData result:", result ? "SUCCESS" : "FAIL");
+
+        if (result) source = "twelvedata";
+    }
+
+    console.log("📊 FINAL SOURCE:", source);
+    console.log("📊 FINAL CANDLES:", result?.length || 0);
+
+    return {
+        candles: result || [],
+        source
+    };
+}
 
 
 // Create market manually (for now)
@@ -64,112 +248,50 @@ router.get("/markets", async (req, res) => {
  * Fetches 1-day minute interval price chart for a token from CoinGecko
  * Example: /market/chart/polkadot
  */
-
 router.get("/chart/:token", async (req, res) => {
     const { token } = req.params;
     const { interval = "5m" } = req.query;
 
-    console.log("📊 Incoming chart request:", { token, interval });
+    console.log("🚀 CHART REQUEST:", { token, interval });
 
     const symbolMap = {
         bitcoin: "BTC",
         ethereum: "ETH",
         solana: "SOL",
         binancecoin: "BNB",
-        "avalanche-2": "AVAX",
         dogecoin: "DOGE",
-        "shiba-inu": "SHIB",
     };
 
     const symbol = symbolMap[token?.toLowerCase()];
 
-    console.log("🔎 Resolved symbol:", symbol);
-
     if (!symbol) {
-        console.warn("❌ Unsupported token:", token);
+        console.log("❌ INVALID TOKEN:", token);
         return res.status(400).json({ error: "Unsupported token" });
     }
 
-    const intervalMap = {
-        "1m": { endpoint: "histominute", aggregate: 1, limit: 200 },
-        "5m": { endpoint: "histominute", aggregate: 5, limit: 200 },
-        "15m": { endpoint: "histominute", aggregate: 15, limit: 200 },
-        "1h": { endpoint: "histohour", aggregate: 1, limit: 200 },
-        "1d": { endpoint: "histoday", aggregate: 1, limit: 200 },
-        "1w": { endpoint: "histoday", aggregate: 7, limit: 200 },
-        "max": { endpoint: "histoday", aggregate: 30, limit: 200 },
-    };
-
-    const config = intervalMap[interval] || intervalMap["5m"];
-
-    const url = `https://min-api.cryptocompare.com/data/v2/${config.endpoint}?fsym=${symbol}&tsym=USD&limit=${config.limit}&aggregate=${config.aggregate}`;
-
-    console.log("🌐 Request URL:", url);
-
     try {
-        const response = await axios.get(url);
+        const { candles, source } = await getCandles(symbol, interval);
 
-        console.log("📦 FULL API RESPONSE:", JSON.stringify(response.data).slice(0, 500));
-
-        // 🔴 Handle API-level error
-        if (response.data.Response === "Error") {
-            console.error("❌ CryptoCompare error:", response.data.Message);
-            return res.json({
-                source: "cryptocompare",
-                interval,
-                candles: [],
-            });
-        }
-
-        const rawData = response.data?.Data?.Data;
-
-        if (!Array.isArray(rawData)) {
-            console.error("❌ Invalid data format:", response.data);
-            return res.json({
-                source: "cryptocompare",
-                interval,
-                candles: [],
-            });
-        }
-
-        console.log("📊 Raw candles count:", rawData.length);
-
-        // 🔥 Filter bad candles (zeros)
-        const candles = rawData
-            .filter(c => c && c.close && c.close !== 0)
-            .map(c => ({
-                time: c.time * 1000,
-                open: c.open,
-                high: c.high,
-                low: c.low,
-                close: c.close,
-            }));
-
-        console.log("✅ Clean candles count:", candles.length);
-
-        if (candles.length === 0) {
-            console.warn("⚠️ No valid candles after filtering");
-        }
+        console.log("📦 RESPONSE SUMMARY:");
+        console.log("source:", source);
+        console.log("candles:", candles.length);
 
         return res.json({
-            source: "cryptocompare",
+            source,
             interval,
-            candles,
+            candles
         });
 
     } catch (err) {
-        console.error("❌ Chart error FULL:", {
-            message: err.message,
-            status: err.response?.status,
-            data: err.response?.data,
-        });
+        console.log("❌ ROUTE ERROR:", err.message);
 
-        return res.status(500).json({
-            error: "Chart fetch failed",
-            details: err.response?.data || err.message,
+        return res.json({
+            source: "error",
+            candles: []
         });
     }
 });
+
 
 router.post("/user_enter_market", async (req, res) => {
     try {
