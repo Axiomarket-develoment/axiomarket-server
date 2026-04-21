@@ -19,8 +19,8 @@ const { startOracle } = require("./services/price/priceOracle");
 const { syncWalletBalances } = require("./services/wallet/syncWalletBalance");
 
 // // ---------------- DNS Config ----------------
-dnsPromises.setServers(["1.1.1.1", "8.8.8.8"]);
-dns.setDefaultResultOrder("ipv4first");
+// dnsPromises.setServers(["1.1.1.1", "8.8.8.8"]);
+// dns.setDefaultResultOrder("ipv4first");
 
 // ---------------- Express Init ----------------
 

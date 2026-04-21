@@ -64,9 +64,12 @@ router.get("/markets", async (req, res) => {
  * Fetches 1-day minute interval price chart for a token from CoinGecko
  * Example: /market/chart/polkadot
  */
+
 router.get("/chart/:token", async (req, res) => {
     const { token } = req.params;
     const { interval = "5m" } = req.query;
+
+    console.log("📊 Incoming chart request:", { token, interval });
 
     const symbolMap = {
         bitcoin: "BTC",
@@ -75,23 +78,23 @@ router.get("/chart/:token", async (req, res) => {
         binancecoin: "BNB",
         "avalanche-2": "AVAX",
         dogecoin: "DOGE",
-        "shiba-inu": "SHIB"
+        "shiba-inu": "SHIB",
     };
 
-    const symbol = symbolMap[token.toLowerCase()];
+    const symbol = symbolMap[token?.toLowerCase()];
+
+    console.log("🔎 Resolved symbol:", symbol);
 
     if (!symbol) {
+        console.warn("❌ Unsupported token:", token);
         return res.status(400).json({ error: "Unsupported token" });
     }
 
-    // 🔥 Map intervals → CryptoCompare endpoints
     const intervalMap = {
-        "1m": { endpoint: "histominute", aggregate: 1, limit: 500 },
-        "5m": { endpoint: "histominute", aggregate: 5, limit: 500 },
-        "15m": { endpoint: "histominute", aggregate: 15, limit: 500 },
+        "1m": { endpoint: "histominute", aggregate: 1, limit: 200 },
+        "5m": { endpoint: "histominute", aggregate: 5, limit: 200 },
+        "15m": { endpoint: "histominute", aggregate: 15, limit: 200 },
         "1h": { endpoint: "histohour", aggregate: 1, limit: 200 },
-
-        // fallback mapping
         "1d": { endpoint: "histoday", aggregate: 1, limit: 200 },
         "1w": { endpoint: "histoday", aggregate: 7, limit: 200 },
         "max": { endpoint: "histoday", aggregate: 30, limit: 200 },
@@ -99,37 +102,71 @@ router.get("/chart/:token", async (req, res) => {
 
     const config = intervalMap[interval] || intervalMap["5m"];
 
-    try {
-        const url = `https://min-api.cryptocompare.com/data/v2/${config.endpoint}?fsym=${symbol}&tsym=USD&limit=${config.limit}&aggregate=${config.aggregate}`;
+    const url = `https://min-api.cryptocompare.com/data/v2/${config.endpoint}?fsym=${symbol}&tsym=USD&limit=${config.limit}&aggregate=${config.aggregate}`;
 
+    console.log("🌐 Request URL:", url);
+
+    try {
         const response = await axios.get(url);
 
-        const data = response.data?.Data?.Data || [];
+        console.log("📦 FULL API RESPONSE:", JSON.stringify(response.data).slice(0, 500));
 
-        const candles = data.map(c => ({
-            time: c.time * 1000,
-            open: c.open,
-            high: c.high,
-            low: c.low,
-            close: c.close
-        }));
+        // 🔴 Handle API-level error
+        if (response.data.Response === "Error") {
+            console.error("❌ CryptoCompare error:", response.data.Message);
+            return res.json({
+                source: "cryptocompare",
+                interval,
+                candles: [],
+            });
+        }
+
+        const rawData = response.data?.Data?.Data;
+
+        if (!Array.isArray(rawData)) {
+            console.error("❌ Invalid data format:", response.data);
+            return res.json({
+                source: "cryptocompare",
+                interval,
+                candles: [],
+            });
+        }
+
+        console.log("📊 Raw candles count:", rawData.length);
+
+        // 🔥 Filter bad candles (zeros)
+        const candles = rawData
+            .filter(c => c && c.close && c.close !== 0)
+            .map(c => ({
+                time: c.time * 1000,
+                open: c.open,
+                high: c.high,
+                low: c.low,
+                close: c.close,
+            }));
+
+        console.log("✅ Clean candles count:", candles.length);
+
+        if (candles.length === 0) {
+            console.warn("⚠️ No valid candles after filtering");
+        }
 
         return res.json({
             source: "cryptocompare",
             interval,
-            candles
+            candles,
         });
 
     } catch (err) {
         console.error("❌ Chart error FULL:", {
             message: err.message,
-            response: err.response?.data,
             status: err.response?.status,
+            data: err.response?.data,
         });
 
         return res.status(500).json({
             error: "Chart fetch failed",
-            details: err.response?.data || err.message
+            details: err.response?.data || err.message,
         });
     }
 });
