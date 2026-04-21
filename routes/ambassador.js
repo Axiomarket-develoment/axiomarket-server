@@ -159,4 +159,30 @@ Router.post("/ambassador_register", async (req, res) => {
     }
 });
 
+
+Router.get("/ambassadors", async (req, res) => {
+    try {
+        const ambassadors = await Ambassador.find({}, {
+            email: 1,
+            marketPercent: 1,
+            referralPercent: 1,
+            _id: 0 // optional: removes MongoDB _id
+        }).sort({ createdAt: -1 });
+
+        return res.status(200).json({
+            success: true,
+            count: ambassadors.length,
+            data: ambassadors
+        });
+
+    } catch (error) {
+        console.error(error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Server error"
+        });
+    }
+});
+
 module.exports = Router;
