@@ -6,7 +6,7 @@ const ambassadorSchema = new mongoose.Schema({
   email:               {type:String },
 
   marketPercent:       {type:Number, default: 10},
-  referralPercent:     {type:Number, default: 10},
+  referralPercent:     {type:Number, default: 5},
 
   totalReferals:       {type:Number, default: 0},
   totalEarninsgs:      {type:Number, default: 0}

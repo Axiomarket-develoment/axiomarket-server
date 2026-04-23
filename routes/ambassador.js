@@ -133,14 +133,14 @@ Router.post("/ambassador_register", async (req, res) => {
         // --------------------
         // Dynamic percent
         // --------------------
-        const percent = stats.ambassadorSlots <= 100 ? 5 : 10;
+        const percent = 5;
 
         // --------------------
         // Save ambassador
         // --------------------
         const ambassador = await Ambassador.create({
             email,
-            marketPercent: percent
+            referralPercent: percent
         });
 
         return res.status(201).json({
