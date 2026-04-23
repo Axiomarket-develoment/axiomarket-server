@@ -53,7 +53,7 @@ Router.get("/ambassador_stats", async (req, res) => {
             stats = await Stats.create({ ambassadorSlots: 150 });
         }
 
-        const percent = stats.ambassadorSlots <= 100 ? 5 : 10;
+        const percent = 10;
 
         return res.status(200).json({
             success: true,
