@@ -81,10 +81,10 @@ mongoose.set("strictQuery", true);
 mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 15000 })
   .then(() => {
     console.log("🟢 MongoDB connected successfully");
-    // startMarketCron();
-    // startOracle()
+    startMarketCron();
+    startOracle()
 
-    // setInterval(syncWalletBalances, 30000);
+    setInterval(syncWalletBalances, 30000);
   })
   .catch((err) => {
     console.error("❌ FULL Mongo Error:", err);
