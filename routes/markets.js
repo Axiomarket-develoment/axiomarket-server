@@ -232,19 +232,22 @@ router.post("/user_enter_market", async (req, res) => {
             };
         });
 
+
         await marketRef.update({
             subMarkets: updatedSubMarkets,
             totalVolume: market.totalVolume,
             tradeCount: market.tradeCount
         });
         await syncUserBalance(user);
+        const safeUser = await User.findById(userId).select("-password");
 
         return res.json({
             success: true,
             message: "User entered market successfully",
             positionId: position._id,
             amount: Number(amount.toFixed(2)),
-            balance: user.balance
+            balance: user.balance,
+            user: safeUser
         });
 
     } catch (err) {
