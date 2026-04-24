@@ -137,7 +137,6 @@ async function createMarket({
     const plainMarket = savedMarket.toObject();
 
     // 5️⃣ FIRESTORE SAFE SUBMARKETS (FULL NORMALIZATION)
-    // 6️⃣ FIRESTORE PAYLOAD
     const firestoreSubMarkets = [];
 
     plainMarket.subMarkets.forEach(sub => {
@@ -166,6 +165,39 @@ async function createMarket({
         resolution: sub.resolution || null
       });
     });
+    // 6️⃣ FIRESTORE PAYLOAD
+    const firestorePayload = {
+      id: plainMarket._id.toString(),
+      question: plainMarket.question,
+      marketType: plainMarket.marketType,
+
+      conversationId: convo._id.toString(),
+
+      metadata: {
+        asset: plainMarket.metadata.asset,
+        startPrice: plainMarket.metadata.startPrice,
+        targetPrice: plainMarket.metadata.targetPrice,
+        assetSymbol: plainMarket.metadata.assetSymbol,
+        direction: plainMarket.metadata.direction
+      },
+
+      currentPrice: plainMarket.metadata.startPrice,
+      targetPrice: plainMarket.metadata.targetPrice,
+      direction: plainMarket.metadata.direction,
+
+      totalVolume: plainMarket.totalVolume || 0,
+      tradeCount: plainMarket.tradeCount || 0,
+      status: plainMarket.status,
+
+      startDate: plainMarket.startDate.getTime(),
+      endDate: plainMarket.endDate.getTime(),
+      durationMinutes: plainMarket.durationMinutes,
+
+
+      subMarkets: firestoreSubMarkets,
+
+      createdAt: Date.now()
+    };
 
     // 7️⃣ SAVE TO FIRESTORE
     await adminDb
