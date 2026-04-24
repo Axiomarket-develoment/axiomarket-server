@@ -194,6 +194,8 @@ router.post("/user_enter_market", async (req, res) => {
             o.percentage = Number(adjusted[i].toFixed(2));
         });
 
+
+
         // 📌 UPDATE STATS
         subMarket.tradeCount += 1;
         subMarket.totalVolume += amount;
@@ -217,6 +219,12 @@ router.post("/user_enter_market", async (req, res) => {
         ]);
 
         // ⚡ FIRESTORE OPTIMIZED UPDATE (NO FULL MARKET REWRITE)
+
+        const index = market.subMarkets.findIndex(
+            sm => sm.id === subMarketId
+        );
+
+        const updatePath = `subMarkets.${index}`;
 
         const marketRef = adminDb.collection("markets").doc(marketId);
         const subRefPath = `subMarkets.${subMarketId}`;
@@ -263,6 +271,9 @@ router.post("/user_enter_market", async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
+
+
 
 router.post("/save_market", async (req, res) => {
     try {
