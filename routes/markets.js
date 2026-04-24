@@ -209,8 +209,6 @@ router.post("/user_enter_market", async (req, res) => {
         // FIRESTORE UPDATE (correct)
         const marketRef = adminDb.collection("markets").doc(marketId);
 
-        const marketRef = adminDb.collection("markets").doc(marketId);
-
         const updatedSubMarkets = market.subMarkets.map(sub => {
             if (sub._id.toString() !== subMarketId.toString()) return sub;
 
