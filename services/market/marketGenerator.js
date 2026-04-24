@@ -137,7 +137,9 @@ async function createMarket({
     const plainMarket = savedMarket.toObject();
 
     // 5️⃣ FIRESTORE SAFE SUBMARKETS (FULL NORMALIZATION)
-    const firestoreSubMarkets = plainMarket.subMarkets.map(sub => {
+    const firestoreSubMarkets = {};
+
+    plainMarket.subMarkets.forEach(sub => {
       const outcomes = (sub.outcomes || []).map(o => ({
         label: o.label || "",
         result: o.result ?? null,
@@ -148,28 +150,19 @@ async function createMarket({
         count: Number(o.count ?? 0),
       }));
 
-      const totalVolume = outcomes.reduce(
-        (acc, o) => acc + Number(o.volume || 0),
-        0
-      );
+      const totalVolume = outcomes.reduce((a, o) => a + o.volume, 0);
+      const tradeCount = outcomes.reduce((a, o) => a + o.count, 0);
 
-      const tradeCount = outcomes.reduce(
-        (acc, o) => acc + Number(o.count || 0),
-        0
-      );
-
-      return {
-        id: sub._id?.toString(),
-        question: sub.question || "",
-        marketType: sub.marketType || "CRYPTO",
-        status: sub.status || "LIVE",
+      firestoreSubMarkets[sub._id.toString()] = {
+        id: sub._id.toString(),
+        question: sub.question,
+        marketType: sub.marketType,
+        status: sub.status,
 
         outcomes,
-
         totalVolume,
         tradeCount,
-
-        resolution: sub.resolution || null,
+        resolution: sub.resolution || null
       };
     });
 

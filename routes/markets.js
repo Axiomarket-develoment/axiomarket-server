@@ -220,24 +220,17 @@ router.post("/user_enter_market", async (req, res) => {
 
         // ⚡ FIRESTORE OPTIMIZED UPDATE (NO FULL MARKET REWRITE)
 
-        const index = market.subMarkets.findIndex(
-            sm => sm.id === subMarketId
-        );
-
-        const updatePath = `subMarkets.${index}`;
-
         const marketRef = adminDb.collection("markets").doc(marketId);
+
         const subRefPath = `subMarkets.${subMarketId}`;
 
         await marketRef.set({
             totalVolume: market.totalVolume,
             tradeCount: market.tradeCount,
 
-            // only update THIS subMarket snapshot
             [subRefPath]: {
                 id: subMarketId,
                 question: subMarket.question,
-
                 tradeCount: subMarket.tradeCount,
                 totalVolume: subMarket.totalVolume,
 
@@ -251,7 +244,6 @@ router.post("/user_enter_market", async (req, res) => {
                 }))
             }
         }, { merge: true });
-
         // 👤 USER SYNC (unchanged)
         await syncUserBalance(user);
 
