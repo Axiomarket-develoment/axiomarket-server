@@ -167,38 +167,34 @@ async function createMarket({
     });
 
     // 6️⃣ FIRESTORE PAYLOAD
-    const firestorePayload = {
-      id: plainMarket._id.toString(),
-      question: plainMarket.question,
-      marketType: plainMarket.marketType,
+    const firestoreSubMarkets = [];
 
-      conversationId: convo._id.toString(),
+    plainMarket.subMarkets.forEach(sub => {
+      const outcomes = (sub.outcomes || []).map(o => ({
+        label: o.label || "",
+        result: o.result ?? null,
+        odds: Number(o.odds ?? 2),
+        pool: Number(o.pool ?? 0),
+        liquidity: Number(o.liquidity ?? 0),
+        volume: Number(o.volume ?? 0),
+        count: Number(o.count ?? 0),
+      }));
 
-      metadata: {
-        asset: plainMarket.metadata.asset,
-        startPrice: plainMarket.metadata.startPrice,
-        targetPrice: plainMarket.metadata.targetPrice,
-        assetSymbol: plainMarket.metadata.assetSymbol,
-        direction: plainMarket.metadata.direction
-      },
+      const totalVolume = outcomes.reduce((a, o) => a + o.volume, 0);
+      const tradeCount = outcomes.reduce((a, o) => a + o.count, 0);
 
-      currentPrice: plainMarket.metadata.startPrice,
-      targetPrice: plainMarket.metadata.targetPrice,
-      direction: plainMarket.metadata.direction,
+      firestoreSubMarkets.push({
+        id: sub._id.toString(),
+        question: sub.question,
+        marketType: sub.marketType,
+        status: sub.status,
 
-      totalVolume: plainMarket.totalVolume || 0,
-      tradeCount: plainMarket.tradeCount || 0,
-      status: plainMarket.status,
-
-      startDate: plainMarket.startDate.getTime(),
-      endDate: plainMarket.endDate.getTime(),
-      durationMinutes: plainMarket.durationMinutes,
-
-
-      subMarkets: firestoreSubMarkets,
-
-      createdAt: Date.now()
-    };
+        outcomes,
+        totalVolume,
+        tradeCount,
+        resolution: sub.resolution || null
+      });
+    });
 
     // 7️⃣ SAVE TO FIRESTORE
     await adminDb

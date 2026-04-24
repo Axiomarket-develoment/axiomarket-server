@@ -117,7 +117,6 @@ router.post("/user_enter_market", async (req, res) => {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         const userId = decoded.id;
 
-        // ⚡ MINIMAL READS ONLY
         const [user, market] = await Promise.all([
             User.findById(userId).select("balance"),
             Market.findById(marketId)
@@ -137,11 +136,10 @@ router.post("/user_enter_market", async (req, res) => {
             return res.status(400).json({ error: "Insufficient balance" });
         }
 
-        // 🔒 LOCK FUNDS
+        // lock funds
         user.balance.testnet -= amount;
         user.balance.locked += amount;
 
-        // 🎯 SELECT OUTCOME
         const selectedOutcome = subMarket.outcomes.find(
             o => o.label.toLowerCase() === outcome.toLowerCase()
         );
@@ -150,7 +148,7 @@ router.post("/user_enter_market", async (req, res) => {
             return res.status(400).json({ error: "Invalid outcome" });
         }
 
-        // 📊 UPDATE OUTCOME DATA (UNCHANGED LOGIC)
+        // update outcome stats
         selectedOutcome.pool += amount;
         selectedOutcome.count += 1;
         selectedOutcome.volume += amount;
@@ -159,15 +157,12 @@ router.post("/user_enter_market", async (req, res) => {
         const totalPool = subMarket.outcomes.reduce((a, o) => a + o.pool, 0);
         const MIN_PERCENT = 20;
 
-        // 1. raw percentages
         let raw = subMarket.outcomes.map(o =>
             totalPool === 0 ? 50 : (o.pool / totalPool) * 100
         );
 
-        // 2. apply minimum floor
         let adjusted = raw.map(p => Math.max(p, MIN_PERCENT));
 
-        // 3. fix overflow if sum > 100
         let sum = adjusted.reduce((a, b) => a + b, 0);
 
         if (sum > 100) {
@@ -185,25 +180,19 @@ router.post("/user_enter_market", async (req, res) => {
             }
         }
 
-        // 4. normalize again
         const finalSum = adjusted.reduce((a, b) => a + b, 0);
         adjusted = adjusted.map(p => (p / finalSum) * 100);
 
-        // 5. assign percentages
         subMarket.outcomes.forEach((o, i) => {
             o.percentage = Number(adjusted[i].toFixed(2));
         });
 
-
-
-        // 📌 UPDATE STATS
         subMarket.tradeCount += 1;
         subMarket.totalVolume += amount;
 
         market.tradeCount = (market.tradeCount || 0) + 1;
         market.totalVolume = (market.totalVolume || 0) + amount;
 
-        // 💾 POSITION
         const position = await Position.create({
             userId,
             marketId,
@@ -212,27 +201,24 @@ router.post("/user_enter_market", async (req, res) => {
             amount
         });
 
-        // 💾 SAVE MONGO (ONLY 2 WRITES)
         await Promise.all([
             user.save(),
             market.save()
         ]);
 
-        // ⚡ FIRESTORE OPTIMIZED UPDATE (NO FULL MARKET REWRITE)
+        // FIRESTORE UPDATE (correct)
+        const marketRef = adminDb.collection("markets").doc(marketId);
 
         const marketRef = adminDb.collection("markets").doc(marketId);
 
-        const subRefPath = `subMarkets.${subMarketId}`;
+        const updatedSubMarkets = market.subMarkets.map(sub => {
+            if (sub._id.toString() !== subMarketId.toString()) return sub;
 
-        await marketRef.set({
-            totalVolume: market.totalVolume,
-            tradeCount: market.tradeCount,
-
-            [subRefPath]: {
-                id: subMarketId,
-                question: subMarket.question,
-                tradeCount: subMarket.tradeCount,
-                totalVolume: subMarket.totalVolume,
+            return {
+                id: sub._id.toString(),
+                question: sub.question,
+                marketType: sub.marketType,
+                status: sub.status,
 
                 outcomes: subMarket.outcomes.map(o => ({
                     label: o.label,
@@ -241,10 +227,18 @@ router.post("/user_enter_market", async (req, res) => {
                     volume: o.volume,
                     liquidity: o.liquidity,
                     percentage: o.percentage
-                }))
-            }
-        }, { merge: true });
-        // 👤 USER SYNC (unchanged)
+                })),
+
+                tradeCount: subMarket.tradeCount,
+                totalVolume: subMarket.totalVolume
+            };
+        });
+
+        await marketRef.update({
+            subMarkets: updatedSubMarkets,
+            totalVolume: market.totalVolume,
+            tradeCount: market.tradeCount
+        });
         await syncUserBalance(user);
 
         return res.json({
@@ -252,10 +246,7 @@ router.post("/user_enter_market", async (req, res) => {
             message: "User entered market successfully",
             positionId: position._id,
             amount: Number(amount.toFixed(2)),
-            balance: {
-                testnet: user.balance.testnet,
-                locked: user.balance.locked
-            }
+            balance: user.balance
         });
 
     } catch (err) {
@@ -263,9 +254,6 @@ router.post("/user_enter_market", async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
-
-
 
 router.post("/save_market", async (req, res) => {
     try {
