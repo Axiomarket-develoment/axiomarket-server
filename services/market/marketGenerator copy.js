@@ -36,13 +36,6 @@ function getNextRoundTime(minutes) {
 }
 
 
-function shuffle(arr) {
-  return arr.sort(() => Math.random() - 0.5);
-}
-
-const shuffledTokens = shuffle([...TOKENS]);
-const shuffledTemplates = shuffle([...QUESTION_TEMPLATES]);
-
 function getSymbol(asset) {
   const map = {
     bitcoin: "BTC",
@@ -202,7 +195,10 @@ async function createMarket({
       durationMinutes: plainMarket.durationMinutes,
 
 
-      subMarkets: firestoreSubMarkets,
+      subMarkets: firestoreSubMarkets.map(sub => ({
+        id: sub.id,
+        status: sub.status
+      })),
 
       createdAt: Date.now()
     };
@@ -232,12 +228,12 @@ async function generateMarkets(durationMinutes) {
 
     const jobs = [];
 
-    for (const asset of shuffledTokens) {
+    for (const asset of TOKENS) {
       const currentPrice = getPrice(asset);
 
       if (!currentPrice) continue;
 
-      for (const template of shuffledTemplates) {
+      for (const template of QUESTION_TEMPLATES) {
         if (count >= MAX_MARKETS) break;
 
         const direction = Math.random() > 0.5 ? "UP" : "DOWN";
@@ -287,10 +283,7 @@ async function generateMarkets(durationMinutes) {
     // 🚀 RUN ALL AT ONCE
     for (const job of jobs) {
       await job;
-      await delay(200); // add this
     }
-
-
     console.log(`🔥 ${jobs.length} markets created at same time`);
   } catch (err) {
     console.error("❌ Bulk generation failed:", err.message);
@@ -298,6 +291,88 @@ async function generateMarkets(durationMinutes) {
 }
 
 
+// async function generateMarkets(durationMinutes) {
+//   try {
+//     const now = new Date();
+//     const endDate = getNextRoundTime(durationMinutes);
+
+//     const MAX_MARKETS = 5;
+//     let count = 0;
+
+//     const jobs = [];
+
+//     for (const asset of TOKENS) {
+//       const currentPrice = getPrice(asset);
+
+//       if (!currentPrice) {
+//         console.log(`⚠️ No price for ${asset}, skipping`);
+//         continue;
+//       }
+
+//       for (const template of QUESTION_TEMPLATES) {
+
+//         const direction = Math.random() > 0.5 ? "UP" : "DOWN";
+
+//         const percentMove = TEST_MODE
+//           ? Math.random() * 0.1 + 0.5
+//           : Math.random() * 2 + 0.2;
+
+//         let targetPrice =
+//           direction === "UP"
+//             ? currentPrice * (1 + percentMove / 100)
+//             : currentPrice * (1 - percentMove / 100);
+
+//         targetPrice =
+//           currentPrice < 1
+//             ? Number(targetPrice.toFixed(8))
+//             : Number(targetPrice.toFixed(2));
+
+//         const question = template
+//           .replace("{asset}", asset)
+//           .replace("{assetSymbol}", getSymbol(asset))
+//           .replace("{directionWord}", getDirectionWord(direction))
+//           .replace("{duration}", formatDuration(durationMinutes))
+//           .replace("{percent}", percentMove.toFixed(2))
+//           .replace("{target}", targetPrice)
+//           .replace(
+//             "{endTime}",
+//             endDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+//           );
+
+
+
+//         for (const asset of TOKENS) {
+//           for (const template of QUESTION_TEMPLATES) {
+//             if (count >= MAX_MARKETS) break;
+
+//             // 👇 PUSH JOB (no await yet)
+//             jobs.push(createMarket({
+//               asset,
+//               question,
+//               currentPrice,
+//               targetPrice,
+//               direction,
+//               durationMinutes,
+//               endDate
+//             }));
+
+//             count++;
+//           }
+//         }
+//       }
+//     }
+
+//     const delay = ms => new Promise(res => setTimeout(res, ms));
+
+//     // 🚀 RUN ALL AT ONCE
+//     for (const job of jobs) {
+//       await job;
+//     }
+//     console.log(`🔥 ${jobs.length} markets created at same time`);
+//   } catch (err) {
+//     console.error("❌ Bulk generation failed:", err.message);
+//   }
+// }
 
 
 module.exports = { generateMarkets, TEST_MODE };

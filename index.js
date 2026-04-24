@@ -19,8 +19,8 @@ const { startOracle } = require("./services/price/priceOracle");
 const { syncWalletBalances } = require("./services/wallet/syncWalletBalance");
 
 // // ---------------- DNS Config ----------------
-// dnsPromises.setServers(["1.1.1.1", "8.8.8.8"]);
-// dns.setDefaultResultOrder("ipv4first");
+dnsPromises.setServers(["1.1.1.1", "8.8.8.8"]);
+dns.setDefaultResultOrder("ipv4first");
 
 // ---------------- Express Init ----------------
 
@@ -81,12 +81,10 @@ mongoose.set("strictQuery", true);
 mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 15000 })
   .then(() => {
     console.log("🟢 MongoDB connected successfully");
-    // startMarketCron();
-    // startOracle()
+    startMarketCron();
+    startOracle()
 
-    // setInterval(() => {
-    //   syncWalletBalances();
-    // }, 10000);
+    setInterval(syncWalletBalances, 30000);
   })
   .catch((err) => {
     console.error("❌ FULL Mongo Error:", err);

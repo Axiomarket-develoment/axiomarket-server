@@ -6,6 +6,14 @@ const { adminDb } = require("../../lib/firebaseAdmin");
 const syncUserBalance = require("../../functions/syncUserBalance");
 const Position = require("../../models/Position");
 
+const Market = require("../../models/Market");
+const Order = require("../../models/Order");
+const Fill = require("../../models/Fill");
+const User = require("../../models/User");
+const { adminDb } = require("../../lib/firebaseAdmin");
+const syncUserBalance = require("../../functions/syncUserBalance");
+const Position = require("../../models/Position");
+
 async function settleMarket(market, winningOutcomeLabel) {
     console.log("\n==============================");
     console.log("🚀 START SETTLEMENT");
@@ -143,5 +151,7 @@ async function settleMarket(market, winningOutcomeLabel) {
     console.log("🎉 SETTLEMENT COMPLETE");
     console.log("==============================\n");
 }
+
+module.exports = { settleMarket };
 
 module.exports = { settleMarket };

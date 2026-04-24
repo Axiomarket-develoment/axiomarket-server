@@ -63,7 +63,15 @@ const MarketSchema = new mongoose.Schema({
                          },
   result:                { type: String, enum: ["YES", "NO"], default: null },
   createdAt:             { type: Date, default: Date.now },
+
+  processing:            {type: Boolean, default: false},
   status:                { type: String, enum: ["PENDING", "LIVE", "ENDED", "SETTLED"], default: "LIVE" },
 });
+
+
+MarketSchema.index({ status: 1, endDate: 1 });
+MarketSchema.index({ status: 1, result: 1 });
+MarketSchema.index({ endDate: 1, status: 1, processing: 1 });
+
 
 module.exports = mongoose.model("Market", MarketSchema);

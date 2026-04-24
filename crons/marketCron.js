@@ -23,13 +23,13 @@ function startMarketCron() {
   });
 
   // 🔴 END MARKETS (runs every minute)
-  cron.schedule("* * * * *", async () => {
+  cron.schedule("*/3 * * * *", async () => {
     const now = new Date();
 
     const markets = await Market.find({
       status: "LIVE",
       endDate: { $lte: now }
-    });
+    }).limit(10);
 
     for (const market of markets) {
       market.status = "ENDED";
@@ -40,27 +40,41 @@ function startMarketCron() {
   });
 
   // 🟣 SETTLEMENT (every 5 minutes)
-  cron.schedule("*/2 * * * *", async () => {
+  cron.schedule("*/5 * * * *", async () => {
     console.log("🏁 Running settlement...");
 
     const markets = await Market.find({
       status: "ENDED",
-      result: null
-    });
+      result: null,
+      processing: { $ne: true }
+    }).limit(10);
 
     for (const market of markets) {
       try {
+        // 🔒 LOCK IT FIRST
+        market.processing = true;
+        await market.save();
+
         const outcome = await fetchOutcomeFromOracle(market);
 
         if (!outcome) {
+          market.processing = false;
+          await market.save();
           console.log("⚠️ No outcome, skipping");
           continue;
         }
 
         await settleMarket(market, outcome);
 
+        // 🔓 UNLOCK AFTER
+        market.processing = false;
+        await market.save();
+
         console.log(`✅ Settled: ${market._id}`);
       } catch (err) {
+        market.processing = false;
+        await market.save();
+
         console.error("❌ Settlement failed:", err.message);
       }
     }

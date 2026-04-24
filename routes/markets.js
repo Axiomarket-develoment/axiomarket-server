@@ -13,192 +13,6 @@ const { TOKEN_CHART_SYMBOLS } = require("../confiq/assets");
 const syncUserBalance = require("../functions/syncUserBalance");
 
 
-async function fetchBinance(symbol, interval) {
-    try {
-        const map = {
-            "1m": "1m",
-            "5m": "5m",
-            "15m": "15m",
-            "1h": "1h",
-            "1d": "1d",
-        };
-
-        const binanceInterval = map[interval] || "5m";
-
-        const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}USDT&interval=${binanceInterval}&limit=200`;
-
-        console.log("🌐 Binance URL:", url);
-
-        const res = await axios.get(url);
-
-        return res.data.map(c => ({
-            time: c[0],
-            open: parseFloat(c[1]),
-            high: parseFloat(c[2]),
-            low: parseFloat(c[3]),
-            close: parseFloat(c[4]),
-        }));
-
-    } catch (e) {
-        console.log("❌ Binance ERROR:", e.message);
-        return null;
-    }
-}
-
-
-
-async function fetchCryptoCompare(symbol, interval, limit, aggregate) {
-    try {
-
-        console.log("📌 CryptoCompare params:", {
-            symbol,
-            interval,
-            limit,
-            aggregate
-        });
-
-        if (!limit || !aggregate) {
-            console.log("❌ INVALID PARAMS → skipping CryptoCompare");
-            return null;
-        }
-
-        const url = `https://min-api.cryptocompare.com/data/v2/histominute?fsym=${symbol}&tsym=USD&limit=${limit}&aggregate=${aggregate}`;
-
-        console.log("🌐 CryptoCompare URL:", url);
-
-        const res = await axios.get(url);
-
-        if (res.data.Response !== "Success") {
-            console.log("❌ CryptoCompare FAILED:", res.data.Message);
-            return null;
-        }
-
-        return res.data.Data.Data.map(c => ({
-            time: c.time * 1000,
-            open: c.open,
-            high: c.high,
-            low: c.low,
-            close: c.close
-        }));
-
-    } catch (e) {
-        console.log("❌ CryptoCompare ERROR:", e.message);
-        return null;
-    }
-}
-
-async function fetchCoinAPI(symbol) {
-    try {
-        const url = `https://rest.coinapi.io/v1/ohlcv/${symbol}/USD/latest?period_id=5MIN&limit=100`;
-
-        console.log("🌐 CoinAPI URL:", url);
-
-        const res = await axios.get(url, {
-            headers: {
-                "X-CoinAPI-Key": process.env.COINAPI_KEY
-            }
-        });
-
-        console.log("📦 CoinAPI SUCCESS");
-
-        return res.data.map(c => ({
-            time: new Date(c.time_period_start).getTime(),
-            open: c.price_open,
-            high: c.price_high,
-            low: c.price_low,
-            close: c.price_close
-        }));
-
-    } catch (e) {
-        console.log("❌ CoinAPI ERROR:", e.response?.data || e.message);
-        return null;
-    }
-}
-
-
-async function fetchTwelveData(symbol) {
-    try {
-        const url = `https://api.twelvedata.com/time_series?symbol=${symbol}/USD&interval=5min&outputsize=100&apikey=${process.env.TWELVEDATA_KEY}`;
-
-        const res = await axios.get(url);
-
-        if (!res.data.values) return null;
-
-        return res.data.values.reverse().map(c => ({
-            time: new Date(c.datetime).getTime(),
-            open: parseFloat(c.open),
-            high: parseFloat(c.high),
-            low: parseFloat(c.low),
-            close: parseFloat(c.close)
-        }));
-
-    } catch (e) {
-        return null;
-    }
-}
-
-async function getCandles(symbol, interval) {
-    console.log("📊 getCandles called:", { symbol, interval });
-
-    let result = null;
-    let source = "none";
-
-    // 1. BINANCE (PRIMARY)
-    result = await fetchBinance(symbol, interval);
-    console.log("🟡 Binance result:", result ? "SUCCESS" : "FAIL");
-
-    if (result) source = "binance";
-
-    // 2. CryptoCompare
-    if (!result) {
-        const configMap = {
-            "1m": { limit: 200, aggregate: 1 },
-            "5m": { limit: 200, aggregate: 5 },
-            "15m": { limit: 200, aggregate: 15 },
-            "1h": { limit: 200, aggregate: 60 },
-        };
-
-        const config = configMap[interval] || configMap["5m"];
-
-        console.log("⚙️ CryptoCompare config:", config);
-
-        result = await fetchCryptoCompare(
-            symbol,
-            interval,
-            config.limit,
-            config.aggregate
-        );
-
-        console.log("🟡 CryptoCompare result:", result ? "SUCCESS" : "FAIL");
-
-        if (result) source = "cryptocompare";
-    }
-
-    // 3. CoinAPI
-    if (!result) {
-        result = await fetchCoinAPI(symbol);
-        console.log("🟡 CoinAPI result:", result ? "SUCCESS" : "FAIL");
-
-        if (result) source = "coinapi";
-    }
-
-    // 4. TwelveData
-    if (!result) {
-        result = await fetchTwelveData(symbol);
-        console.log("🟡 TwelveData result:", result ? "SUCCESS" : "FAIL");
-
-        if (result) source = "twelvedata";
-    }
-
-    console.log("📊 FINAL SOURCE:", source);
-    console.log("📊 FINAL CANDLES:", result?.length || 0);
-
-    return {
-        candles: result || [],
-        source
-    };
-}
-
 
 // Create market manually (for now)
 router.post("/create", async (req, res) => {
@@ -235,6 +49,9 @@ router.post("/create", async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
+
+
 // Get all markets
 router.get("/markets", async (req, res) => {
     const markets = await Market.find().sort({ createdAt: -1 });
@@ -300,39 +117,46 @@ router.post("/user_enter_market", async (req, res) => {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         const userId = decoded.id;
 
+        // ⚡ MINIMAL READS ONLY
+        const [user, market] = await Promise.all([
+            User.findById(userId).select("balance"),
+            Market.findById(marketId)
+        ]);
 
-        const user = await User.findById(userId).select("-password");
-        const market = await Market.findById(marketId);
-        const subMarket = market?.subMarkets.id(subMarketId);
-
-        // console.log("UserId" , userId)
-        // console.log("UserId" , subMarket)
-        // console.log("UserId" , market)
-        if (!user || !market || !subMarket) {
+        if (!user || !market) {
             return res.status(404).json({ error: "Invalid data" });
         }
 
-        if (user.balance.testnet < amount) {
-            return res.status(400).json({ error: true, msg: "Insufficient balance" });
+        const subMarket = market.subMarkets.id(subMarketId);
+
+        if (!subMarket) {
+            return res.status(404).json({ error: "SubMarket not found" });
         }
 
-        // 🔒 Lock funds
+        if (user.balance.testnet < amount) {
+            return res.status(400).json({ error: "Insufficient balance" });
+        }
+
+        // 🔒 LOCK FUNDS
         user.balance.testnet -= amount;
         user.balance.locked += amount;
 
-        // ✅ Update selected outcome
+        // 🎯 SELECT OUTCOME
         const selectedOutcome = subMarket.outcomes.find(
             o => o.label.toLowerCase() === outcome.toLowerCase()
         );
-        if (!selectedOutcome) return res.status(400).json({ error: "Invalid outcome" });
 
+        if (!selectedOutcome) {
+            return res.status(400).json({ error: "Invalid outcome" });
+        }
+
+        // 📊 UPDATE OUTCOME DATA (UNCHANGED LOGIC)
         selectedOutcome.pool += amount;
         selectedOutcome.count += 1;
-        selectedOutcome.volume += amount;      // ✅ ADD THIS
+        selectedOutcome.volume += amount;
         selectedOutcome.liquidity += amount;
 
         const totalPool = subMarket.outcomes.reduce((a, o) => a + o.pool, 0);
-
         const MIN_PERCENT = 20;
 
         // 1. raw percentages
@@ -349,7 +173,6 @@ router.post("/user_enter_market", async (req, res) => {
         if (sum > 100) {
             const excess = sum - 100;
 
-            // only reduce those above MIN_PERCENT
             const flexibleIndexes = adjusted
                 .map((p, i) => (p > MIN_PERCENT ? i : -1))
                 .filter(i => i !== -1);
@@ -362,16 +185,23 @@ router.post("/user_enter_market", async (req, res) => {
             }
         }
 
-        // 4. fix floating errors → normalize again
+        // 4. normalize again
         const finalSum = adjusted.reduce((a, b) => a + b, 0);
         adjusted = adjusted.map(p => (p / finalSum) * 100);
 
-        // 5. assign
+        // 5. assign percentages
         subMarket.outcomes.forEach((o, i) => {
             o.percentage = Number(adjusted[i].toFixed(2));
         });
 
-        // ✅ Save position
+        // 📌 UPDATE STATS
+        subMarket.tradeCount += 1;
+        subMarket.totalVolume += amount;
+
+        market.tradeCount = (market.tradeCount || 0) + 1;
+        market.totalVolume = (market.totalVolume || 0) + amount;
+
+        // 💾 POSITION
         const position = await Position.create({
             userId,
             marketId,
@@ -380,65 +210,52 @@ router.post("/user_enter_market", async (req, res) => {
             amount
         });
 
-        // Update subMarket stats
-        subMarket.tradeCount += 1;
-        subMarket.totalVolume += amount;
+        // 💾 SAVE MONGO (ONLY 2 WRITES)
+        await Promise.all([
+            user.save(),
+            market.save()
+        ]);
 
-        market.tradeCount = (market.tradeCount || 0) + 1;   // ✅ ADD
-        market.totalVolume = (market.totalVolume || 0) + amount; // ✅ ADD
+        // ⚡ FIRESTORE OPTIMIZED UPDATE (NO FULL MARKET REWRITE)
 
-        // 🔹 Round user balances
-        user.balance.testnet = Number(user.balance.testnet.toFixed(2));
-        user.balance.locked = Number(user.balance.locked.toFixed(2));
+        const marketRef = adminDb.collection("markets").doc(marketId);
+        const subRefPath = `subMarkets.${subMarketId}`;
 
-        await user.save();
-        await market.save();
+        await marketRef.set({
+            totalVolume: market.totalVolume,
+            tradeCount: market.tradeCount,
 
-        // 🔹 Sync updated market to Firestore
-        const marketDoc = adminDb.collection("markets").doc(market._id.toString());
-        await marketDoc.set({
-            subMarkets: market.subMarkets.map(sub => ({
-                id: sub._id.toString(),
-                question: sub.question || null,
-                outcomes: sub.outcomes.map(o => ({
+            // only update THIS subMarket snapshot
+            [subRefPath]: {
+                id: subMarketId,
+                question: subMarket.question,
+
+                tradeCount: subMarket.tradeCount,
+                totalVolume: subMarket.totalVolume,
+
+                outcomes: subMarket.outcomes.map(o => ({
                     label: o.label,
-                    pool: Number(o.pool || 0),
-                    count: Number(o.count || 0),
-                    odds: Number(o.odds || 2),
-                    volume: Number(o.volume || 0),
-                    liquidity: Number(o.liquidity || 0),
-                    result: o.result ?? null,
-                    percentage: Number(o.percentage || 50)
-                })),
-                tradeCount: sub.tradeCount || 0,
-                totalVolume: sub.totalVolume || 0,
-                status: sub.status || "LIVE",
-            })),
-            totalVolume: market.totalVolume || 0,
-            tradeCount: market.tradeCount || 0,
-            status: market.status || "LIVE"
+                    pool: o.pool,
+                    count: o.count,
+                    volume: o.volume,
+                    liquidity: o.liquidity,
+                    percentage: o.percentage
+                }))
+            }
         }, { merge: true });
 
-        // 🔹 **Sync user balance to Firestore**
+        // 👤 USER SYNC (unchanged)
         await syncUserBalance(user);
 
-        // 🔹 Return full user data without password
-        res.json({
+        return res.json({
             success: true,
             message: "User entered market successfully",
-            user, // full user object, no password
-            market: {
-                id: market._id,
-                subMarketId: subMarket._id,
-                outcomes: subMarket.outcomes.reduce((acc, o) => {
-                    acc[o.label] = { pool: o.pool, count: o.count };
-                    return acc;
-                }, {}),
-                totalPool: subMarket.outcomes.reduce((a, o) => a + o.pool, 0),
-                totalCount: subMarket.outcomes.reduce((a, o) => a + o.count, 0)
-            },
             positionId: position._id,
-            amount: Number(amount.toFixed(2))
+            amount: Number(amount.toFixed(2)),
+            balance: {
+                testnet: user.balance.testnet,
+                locked: user.balance.locked
+            }
         });
 
     } catch (err) {
