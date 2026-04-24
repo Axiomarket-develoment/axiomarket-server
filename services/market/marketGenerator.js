@@ -137,35 +137,6 @@ async function createMarket({
     const plainMarket = savedMarket.toObject();
 
     // 5️⃣ FIRESTORE SAFE SUBMARKETS (FULL NORMALIZATION)
-    const firestoreSubMarkets = {};
-
-    plainMarket.subMarkets.forEach(sub => {
-      const outcomes = (sub.outcomes || []).map(o => ({
-        label: o.label || "",
-        result: o.result ?? null,
-        odds: Number(o.odds ?? 2),
-        pool: Number(o.pool ?? 0),
-        liquidity: Number(o.liquidity ?? 0),
-        volume: Number(o.volume ?? 0),
-        count: Number(o.count ?? 0),
-      }));
-
-      const totalVolume = outcomes.reduce((a, o) => a + o.volume, 0);
-      const tradeCount = outcomes.reduce((a, o) => a + o.count, 0);
-
-      firestoreSubMarkets[sub._id.toString()] = {
-        id: sub._id.toString(),
-        question: sub.question,
-        marketType: sub.marketType,
-        status: sub.status,
-
-        outcomes,
-        totalVolume,
-        tradeCount,
-        resolution: sub.resolution || null
-      };
-    });
-
     // 6️⃣ FIRESTORE PAYLOAD
     const firestoreSubMarkets = [];
 
