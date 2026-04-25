@@ -13,8 +13,11 @@ router.get("/get_history", async (req, res) => {
         }
 
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const userId = decoded.id;
+        const userId = decoded.id || decoded.userId || decoded._id;
 
+        if (!userId) {
+            return res.status(401).json({ error: "Invalid token payload" });
+        }
         const positions = await Position.find({ userId })
             .populate("marketId")
             .sort({ createdAt: -1 });

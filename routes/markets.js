@@ -115,8 +115,11 @@ router.post("/user_enter_market", async (req, res) => {
         const { token, marketId, subMarketId, outcome, amount } = req.body;
 
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const userId = decoded.id;
+        const userId = decoded.id || decoded.userId || decoded._id;
 
+        if (!userId) {
+            return res.status(401).json({ error: "Invalid token payload" });
+        }
         const [user, market] = await Promise.all([
             User.findById(userId).select("balance"),
             Market.findById(marketId)
@@ -260,8 +263,11 @@ router.post("/save_market", async (req, res) => {
     try {
         const { token, marketId, action } = req.body; // action = "save" | "unsave"
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const userId = decoded.id;
+        const userId = decoded.id || decoded.userId || decoded._id;
 
+        if (!userId) {
+            return res.status(401).json({ error: "Invalid token payload" });
+        }
         const user = await User.findById(userId);
         if (!user) return res.status(404).json({ error: "User not found" });
 

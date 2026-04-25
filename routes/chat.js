@@ -17,8 +17,11 @@ router.post("/get_messages", async (req, res) => {
 
     // Verify user
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const userId = decoded.id;
+    const userId = decoded.id || decoded.userId || decoded._id;
 
+    if (!userId) {
+      return res.status(401).json({ error: "Invalid token payload" });
+    }
     const user = await User.findById(userId);
     if (!user) return res.status(401).json({ success: false, msg: "User not found" });
 

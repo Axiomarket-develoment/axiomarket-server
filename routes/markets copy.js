@@ -110,8 +110,11 @@ router.post("/user_enter_market", async (req, res) => {
         const { token, marketId, subMarketId, outcome, amount } = req.body;
 
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const userId = decoded.id;
+        const userId = decoded.id || decoded.userId || decoded._id;
 
+        if (!userId) {
+            return res.status(401).json({ error: "Invalid token payload" });
+        }
         console.log("userID", userId);
         console.log("BODY:", req.body);
         console.log("TOKEN:", token);

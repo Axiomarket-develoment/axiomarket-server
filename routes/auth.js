@@ -82,9 +82,12 @@ router.post("/google", async (req, res) => {
 
         // JWT
         const token = jwt.sign(
-            { id: user._id, email: user.email },
+            {
+                id: user._id.toString(),
+                email: user.email
+            },
             JWT_SECRET,
-            { expiresIn: "7d" }
+            { expiresIn: "30d" }
         );
 
         res.json({ success: true, token, user });
@@ -120,8 +123,14 @@ router.post("/signup", async (req, res) => {
 
         await syncUserToFirestore(user, "email");
 
-        const token = jwt.sign({ id: user._id }, JWT_SECRET);
-
+        const token = jwt.sign(
+            {
+                id: user._id.toString(),
+                email: user.email
+            },
+            JWT_SECRET,
+            { expiresIn: "30d" }
+        );
         res.json({ user, token });
 
     } catch (err) {
@@ -153,8 +162,14 @@ router.post("/login", async (req, res) => {
 
         await syncUserToFirestore(user, "email");
 
-        const token = jwt.sign({ id: user._id }, JWT_SECRET);
-
+        const token = jwt.sign(
+            {
+                id: user._id.toString(),
+                email: user.email
+            },
+            JWT_SECRET,
+            { expiresIn: "30d" }
+        );
         res.json({ user, token });
 
     } catch (err) {
