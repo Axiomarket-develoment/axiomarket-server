@@ -6,7 +6,7 @@ const chartCache = new Map();
 
 const ASSETS = TOKENS;
 
-const INTERVAL = 15000; // 15 seconds
+const INTERVAL = 30000; // 15 seconds
 
 // ===============================
 // CHART BUILDER
@@ -121,11 +121,11 @@ async function fetchPrices() {
     try {
         const paprikaMap = {
             bitcoin: "btc-bitcoin",
-            ethereum: "eth-ethereum",
-            solana: "sol-solana",
-            binancecoin: "bnb-binance-coin",
+            // ethereum: "eth-ethereum",
+            // solana: "sol-solana",
+            // binancecoin: "bnb-binance-coin",
             "avalanche-2": "avax-avalanche",
-            dogecoin: "doge-dogecoin",
+            // dogecoin: "doge-dogecoin",
         };
 
         const prices = {};
@@ -155,12 +155,9 @@ async function fetchPrices() {
     try {
         const symbolMap = {
             bitcoin: "BTC",
-            ethereum: "ETH",
-            solana: "SOL",
-            binancecoin: "BNB",
+       
             "avalanche-2": "AVAX",
-            dogecoin: "DOGE",
-            "shiba-inu": "SHIB"
+        
         };
 
         const prices = {};
