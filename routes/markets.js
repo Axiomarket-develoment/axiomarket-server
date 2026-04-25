@@ -146,18 +146,28 @@ router.post("/user_enter_market", async (req, res) => {
             });
         }
 
+
+        const WHITELISTED_EMAILS = [
+            "admin@example.com",
+            "testuser@gmail.com",
+            "danieldaudu65@gmail.com"
+        ];
+
         // Ambassador check
         const isAmbassador = await Ambassador.findOne({
             $or: [{ user: userId }, { email: user.email }]
         });
 
-        if (!isAmbassador) {
+        const isWhitelisted = WHITELISTED_EMAILS.includes(
+            user.email.toLowerCase()
+        );
+
+        if (!isAmbassador && !isWhitelisted) {
             return res.status(403).json({
                 success: false,
                 message: "Access denied: ambassadors only"
             });
         }
-
         const subMarket = market.subMarkets.id(subMarketId);
 
         if (!subMarket) {
