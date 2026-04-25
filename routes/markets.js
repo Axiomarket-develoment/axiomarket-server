@@ -149,7 +149,7 @@ router.post("/user_enter_market", async (req, res) => {
 
         const WHITELISTED_EMAILS = [
             "admin@example.com",
-            "testuser@gmail.com",
+            "derik0x0x@gmail.com",
             "danieldaudu65@gmail.com"
         ];
 
