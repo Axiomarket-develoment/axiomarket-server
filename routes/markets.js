@@ -117,44 +117,61 @@ router.post("/user_enter_market", async (req, res) => {
     try {
         const { token, marketId, subMarketId, outcome, amount } = req.body;
 
+        if (!token || !marketId || !subMarketId || !outcome || !amount) {
+            return res.status(400).json({
+                success: false,
+                message: "All fields are required"
+            });
+        }
+
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         const userId = decoded.id || decoded.userId || decoded._id;
 
         if (!userId) {
-            return res.status(401).json({ error: "Invalid token payload" });
+            return res.status(401).json({
+                success: false,
+                message: "Invalid authentication token"
+            });
         }
+
         const [user, market] = await Promise.all([
-            User.findById(userId).select("balance"),
+            User.findById(userId).select("balance email"),
             Market.findById(marketId)
         ]);
 
         if (!user || !market) {
-            return res.status(404).json({ error: "Invalid data" });
+            return res.status(404).json({
+                success: false,
+                message: "User or market not found"
+            });
         }
 
-
-        // 🔥 AMBASSADOR CHECK (NEW)
+        // Ambassador check
         const isAmbassador = await Ambassador.findOne({
-            $or: [
-                { user: userId },
-                { email: user.email }
-            ]
+            $or: [{ user: userId }, { email: user.email }]
         });
 
         if (!isAmbassador) {
             return res.status(403).json({
-                error: "You are not an ambassador"
+                success: false,
+                message: "Access denied: ambassadors only"
             });
         }
 
         const subMarket = market.subMarkets.id(subMarketId);
 
         if (!subMarket) {
-            return res.status(404).json({ error: "SubMarket not found" });
+            return res.status(404).json({
+                success: false,
+                message: "Sub-market not found"
+            });
         }
 
         if (user.balance.testnet < amount) {
-            return res.status(400).json({ error: "Insufficient balance" });
+            return res.status(400).json({
+                success: false,
+                message: "Insufficient balance"
+            });
         }
 
         // lock funds
@@ -166,10 +183,13 @@ router.post("/user_enter_market", async (req, res) => {
         );
 
         if (!selectedOutcome) {
-            return res.status(400).json({ error: "Invalid outcome" });
+            return res.status(400).json({
+                success: false,
+                message: "Invalid outcome selected"
+            });
         }
 
-        // update outcome stats
+        // update stats
         selectedOutcome.pool += amount;
         selectedOutcome.count += 1;
         selectedOutcome.volume += amount;
@@ -183,12 +203,10 @@ router.post("/user_enter_market", async (req, res) => {
         );
 
         let adjusted = raw.map(p => Math.max(p, MIN_PERCENT));
-
         let sum = adjusted.reduce((a, b) => a + b, 0);
 
         if (sum > 100) {
             const excess = sum - 100;
-
             const flexibleIndexes = adjusted
                 .map((p, i) => (p > MIN_PERCENT ? i : -1))
                 .filter(i => i !== -1);
@@ -227,53 +245,62 @@ router.post("/user_enter_market", async (req, res) => {
             market.save()
         ]);
 
-        // FIRESTORE UPDATE (correct)
-        const marketRef = adminDb.collection("markets").doc(marketId);
+        // Firestore update
+        try {
+            const marketRef = adminDb.collection("markets").doc(marketId);
 
-        const updatedSubMarkets = market.subMarkets.map(sub => {
-            if (sub._id.toString() !== subMarketId.toString()) return sub;
+            const updatedSubMarkets = market.subMarkets.map(sub => {
+                if (sub._id.toString() !== subMarketId.toString()) return sub;
 
-            return {
-                id: sub._id.toString(),
-                question: sub.question,
-                marketType: sub.marketType,
-                status: sub.status,
+                return {
+                    id: sub._id.toString(),
+                    question: sub.question,
+                    marketType: sub.marketType,
+                    status: sub.status,
+                    outcomes: subMarket.outcomes.map(o => ({
+                        label: o.label,
+                        pool: o.pool,
+                        count: o.count,
+                        volume: o.volume,
+                        liquidity: o.liquidity,
+                        percentage: o.percentage
+                    })),
+                    tradeCount: subMarket.tradeCount,
+                    totalVolume: subMarket.totalVolume
+                };
+            });
 
-                outcomes: subMarket.outcomes.map(o => ({
-                    label: o.label,
-                    pool: o.pool,
-                    count: o.count,
-                    volume: o.volume,
-                    liquidity: o.liquidity,
-                    percentage: o.percentage
-                })),
+            await marketRef.update({
+                subMarkets: updatedSubMarkets,
+                totalVolume: market.totalVolume,
+                tradeCount: market.tradeCount
+            });
 
-                tradeCount: subMarket.tradeCount,
-                totalVolume: subMarket.totalVolume
-            };
-        });
+        } catch (e) {
+            console.error("Firestore update failed:", e.message);
+        }
 
-
-        await marketRef.update({
-            subMarkets: updatedSubMarkets,
-            totalVolume: market.totalVolume,
-            tradeCount: market.tradeCount
-        });
         await syncUserBalance(user);
         const safeUser = await User.findById(userId).select("-password");
 
         return res.json({
             success: true,
-            message: "User entered market successfully",
-            positionId: position._id,
-            amount: Number(amount.toFixed(2)),
-            balance: user.balance,
-            user: safeUser
+            message: "Trade placed successfully",
+            data: {
+                positionId: position._id,
+                amount: Number(amount.toFixed(2)),
+                balance: user.balance,
+                user: safeUser
+            }
         });
 
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: err.message });
+
+        return res.status(500).json({
+            success: false,
+            message: err.message || "Something went wrong"
+        });
     }
 });
 
