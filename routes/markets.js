@@ -213,7 +213,7 @@ router.post("/user_enter_market", async (req, res) => {
 
         // lock funds (UNCHANGED logic)
         user.balance.testnet -= amount;
-        user.balance.locked += amount;
+        user.balance.locked += netAmount;
 
         const selectedOutcome = subMarket.outcomes.find(
             o => o.label.toLowerCase() === outcome.toLowerCase()
