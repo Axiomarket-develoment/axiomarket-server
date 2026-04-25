@@ -42,9 +42,50 @@ const syncUserToFirestore = async (user, provider) => {
         lastLogin: Date.now()
     }, { merge: true });
 };
+
+
+
 // ==========================
 // 🔥 GOOGLE AUTH
 // ==========================
+
+router.post("/check-token", async (req, res) => {
+    try {
+        const { token } = req.body;
+
+        if (!token) {
+            return res.status(400).json({
+                valid: false,
+                message: "No token provided"
+            });
+        }
+
+        const decoded = jwt.verify(token, JWT_SECRET);
+
+        return res.json({
+            valid: true,
+            expired: false,
+            userId: decoded.id,
+            email: decoded.email || null
+        });
+
+    } catch (err) {
+        if (err.name === "TokenExpiredError") {
+            return res.status(401).json({
+                valid: false,
+                expired: true,
+                message: "Token expired"
+            });
+        }
+
+        return res.status(401).json({
+            valid: false,
+            expired: false,
+            message: "Invalid token"
+        });
+    }
+});
+
 router.post("/google", async (req, res) => {
     try {
         const { token: accessToken } = req.body;
