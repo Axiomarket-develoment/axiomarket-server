@@ -129,6 +129,21 @@ router.post("/user_enter_market", async (req, res) => {
             return res.status(404).json({ error: "Invalid data" });
         }
 
+
+        // 🔥 AMBASSADOR CHECK (NEW)
+        const isAmbassador = await Ambassador.findOne({
+            $or: [
+                { user: userId },
+                { email: user.email }
+            ]
+        });
+
+        if (!isAmbassador) {
+            return res.status(403).json({
+                error: "You are not an ambassador"
+            });
+        }
+
         const subMarket = market.subMarkets.id(subMarketId);
 
         if (!subMarket) {
