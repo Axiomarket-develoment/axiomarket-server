@@ -11,7 +11,8 @@ const { adminDb } = require("../lib/firebaseAdmin");
 const Fill = require("../models/Fill");
 const { TOKEN_CHART_SYMBOLS } = require("../confiq/assets");
 const syncUserBalance = require("../functions/syncUserBalance");
-const Ambassador = require("../models/Ambassador")
+const Ambassador = require("../models/Ambassador");
+const Stats = require("../models/Stats");
 
 
 
@@ -146,14 +147,12 @@ router.post("/user_enter_market", async (req, res) => {
             });
         }
 
-
         const WHITELISTED_EMAILS = [
             "admin@example.com",
             "derik0x0x@gmail.com",
             "danieldaudu65@gmail.com"
         ];
 
-        // Ambassador check
         const isAmbassador = await Ambassador.findOne({
             $or: [{ user: userId }, { email: user.email }]
         });
@@ -168,6 +167,7 @@ router.post("/user_enter_market", async (req, res) => {
                 message: "Access denied: ambassadors only"
             });
         }
+
         const subMarket = market.subMarkets.id(subMarketId);
 
         if (!subMarket) {
@@ -177,6 +177,33 @@ router.post("/user_enter_market", async (req, res) => {
             });
         }
 
+        // =========================
+        // ✅ FEE IMPLEMENTATION (ADDED ONLY)
+        // =========================
+        const FEE_RATE = 0.05;
+        const fee = amount * FEE_RATE;
+        const netAmount = amount - fee;
+
+
+
+        // optional safety
+        if (netAmount <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid trade amount"
+            });
+        }
+
+        let stats = await Stats.findOne();
+
+        if (!stats) {
+            stats = await Stats.create({});
+        }
+
+        stats.totalFees += fee;
+        await stats.save();
+
+        // balance check stays SAME (user pays full amount)
         if (user.balance.testnet < amount) {
             return res.status(400).json({
                 success: false,
@@ -184,7 +211,7 @@ router.post("/user_enter_market", async (req, res) => {
             });
         }
 
-        // lock funds
+        // lock funds (UNCHANGED logic)
         user.balance.testnet -= amount;
         user.balance.locked += amount;
 
@@ -199,7 +226,7 @@ router.post("/user_enter_market", async (req, res) => {
             });
         }
 
-        // update stats
+        // update stats (UNCHANGED except using amount as before)
         selectedOutcome.pool += amount;
         selectedOutcome.count += 1;
         selectedOutcome.volume += amount;
@@ -255,7 +282,7 @@ router.post("/user_enter_market", async (req, res) => {
             market.save()
         ]);
 
-        // Firestore update
+        // Firestore update (UNCHANGED)
         try {
             const marketRef = adminDb.collection("markets").doc(marketId);
 
@@ -299,6 +326,8 @@ router.post("/user_enter_market", async (req, res) => {
             data: {
                 positionId: position._id,
                 amount: Number(amount.toFixed(2)),
+                fee: Number(fee.toFixed(2)),           // ✅ ADDED
+                netAmount: Number(netAmount.toFixed(2)), // ✅ ADDED
                 balance: user.balance,
                 user: safeUser
             }
