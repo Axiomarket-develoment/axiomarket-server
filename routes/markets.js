@@ -11,6 +11,7 @@ const { adminDb } = require("../lib/firebaseAdmin");
 const Fill = require("../models/Fill");
 const { TOKEN_CHART_SYMBOLS } = require("../confiq/assets");
 const syncUserBalance = require("../functions/syncUserBalance");
+const Ambassador = require("../models/Ambassador")
 
 
 
