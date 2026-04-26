@@ -183,26 +183,56 @@ router.post("/signup", async (req, res) => {
 // 🔥 EMAIL LOGIN
 // ==========================
 router.post("/login", async (req, res) => {
+    console.log("📥 LOGIN REQUEST RECEIVED");
+
     try {
         const { email, password } = req.body;
+        console.log("📧 Email:", email);
+        console.log("🔑 Password provided:", !!password);
 
+        // 1️⃣ Find user
         const user = await User.findOne({ email });
+        console.log("🔍 User lookup result:", user ? "FOUND" : "NOT FOUND");
 
         if (!user) {
+            console.log("❌ User not found");
             return res.status(400).json({ message: "User not found" });
         }
 
+        // 2️⃣ Check auth provider
+        console.log("🧠 Auth provider:", user.auhtProvider);
         if (!user.password) {
+            console.log("⚠️ No password set (social login user)");
             return res.status(400).json({
                 message: "This account was created with Google/Twitter. Please use that method."
             });
         }
 
+        // 3️⃣ Compare password
         const match = await bcrypt.compare(password, user.password);
-        if (!match) return res.status(400).json({ message: "Invalid credentials" });
+        console.log("🔐 Password match:", match);
 
+        if (!match) {
+            console.log("❌ Invalid password");
+            return res.status(400).json({ message: "Invalid credentials" });
+        }
+
+        // 4️⃣ Telegram status
+        console.log("📲 Telegram connected:", user.telegram?.connected);
+        console.log("🎟️ Telegram token:", user.telegramToken);
+
+        // 5️⃣ Wallet status
+        console.log("💰 Wallet connected:", user.wallet?.connected);
+
+        // 6️⃣ NFT status
+        console.log("🖼️ NFT paid:", user.nft?.paid);
+
+        // 7️⃣ Sync Firestore
+        console.log("🔥 Syncing to Firestore...");
         await syncUserToFirestore(user, "email");
+        console.log("✅ Firestore sync complete");
 
+        // 8️⃣ Generate token
         const token = jwt.sign(
             {
                 id: user._id.toString(),
@@ -211,13 +241,27 @@ router.post("/login", async (req, res) => {
             JWT_SECRET,
             { expiresIn: "30d" }
         );
-        res.json({ user, token });
+
+        console.log("🎫 JWT generated");
+
+        // 9️⃣ Final response
+        console.log("✅ LOGIN SUCCESS");
+
+        res.json({
+            user,
+            token,
+            debug: {
+                telegramConnected: user.telegram?.connected,
+                walletConnected: user.wallet?.connected,
+                nftPaid: user.nft?.paid
+            }
+        });
 
     } catch (err) {
+        console.error("💥 LOGIN ERROR:", err);
         res.status(500).json({ message: "Login failed" });
     }
 });
-
 // ==========================
 // 🔥 TWITTER AUTH
 // ==========================
