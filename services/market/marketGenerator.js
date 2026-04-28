@@ -16,13 +16,18 @@ function getDirectionWord(direction) {
   return direction === "UP" ? "up" : "down";
 }
 
-function getMarketAnchor() {
+function getMarketCycleStart() {
   const now = new Date();
 
-  const anchor = new Date(now);
-  anchor.setHours(9, 0, 0, 0); // 9:00 AM FIXED DAILY START
+  const today9AM = new Date(now);
+  today9AM.setHours(9, 0, 0, 0);
 
-  return anchor;
+  // if it's before 9AM → use yesterday 9AM
+  if (now < today9AM) {
+    today9AM.setDate(today9AM.getDate() - 1);
+  }
+
+  return today9AM;
 }
 
 function normalizeToken(token) {
@@ -126,7 +131,7 @@ async function createMarket({
         direction
       },
 
-      startDate: new Date(endDate.getTime() - durationMinutes * 60000),
+      startDate:  cycleStart,
       endDate,
       durationMinutes,
       status: "LIVE"
@@ -228,12 +233,11 @@ async function generateMarkets() {
     const jobs = [];
 
     // 🧠 FIXED DAILY ANCHOR
-    const anchor = getMarketAnchor();
-
-    const endMap = {
-      720: new Date(anchor.getTime() + 12 * 60 * 60 * 1000),
-      1440: new Date(anchor.getTime() + 24 * 60 * 60 * 1000)
-    };
+const cycleStart = getMarketCycleStart();
+  const endMap = {
+  720: new Date(cycleStart.getTime() + 12 * 60 * 60 * 1000),
+  1440: new Date(cycleStart.getTime() + 24 * 60 * 60 * 1000)
+};
 
     for (const durationMinutes of [720, 1440]) {
 

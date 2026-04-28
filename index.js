@@ -28,6 +28,7 @@ const app = express();
 const httpServer = createServer(app);
 
 
+
 HttpServer(httpServer);
 
 const PORT = process.env.PORT || 7000;
@@ -69,7 +70,6 @@ app.use(session({
 }));
 
 
-
 // ---------------- Passport ----------------
 app.use(passport.initialize());
 app.use(passport.session());
@@ -77,7 +77,7 @@ app.use(passport.session());
 // ---------------- MongoDB ----------------
 mongoose.set("strictQuery", true);
 mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 15000 })
-  .then(() => {
+  .then( () => {
     console.log("🟢 MongoDB connected successfully");
     startMarketCron();
     startOracle()
