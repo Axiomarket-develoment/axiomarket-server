@@ -14,10 +14,14 @@ function startMarketCron() {
 
   // 🔵 15 MINUTE MARKETS
  // 🕘 DAILY MARKET GENERATION (9 AM)
-cron.schedule("25 9 * * *", async () => {
-  console.log("🌅 Generating markets at 9:17...");
+cron.schedule("30 9 * * *", async () => {
+  console.log("🌅 Generating markets...");
   await generateMarkets();
+}, {
+  timezone: "Africa/Lagos"
 });
+
+
 
   // 🔴 END MARKETS (runs every minute)
 cron.schedule("0 */2 * * *", async () => {
