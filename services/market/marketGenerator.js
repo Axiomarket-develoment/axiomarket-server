@@ -213,82 +213,76 @@ async function createMarket({
   }
 }
 
-
-async function generateMarkets(durationMinutes) {
+async function generateMarkets() {
   try {
-    const now = new Date();
-    const endDate = getNextRoundTime(durationMinutes);
-
-    const MAX_MARKETS = 5;
-    let count = 0;
+    const durations = [720, 1440]; // 12h and 24h
+    const directions = ["UP", "DOWN"];
 
     const jobs = [];
 
-    for (const asset of shuffledTokens) {
-      const currentPrice = getPrice(asset);
+    for (const durationMinutes of durations) {
+      const endDate = getNextRoundTime(durationMinutes);
 
-      if (!currentPrice) continue;
+      for (const asset of shuffledTokens) {
+        const currentPrice = getPrice(asset);
+        if (!currentPrice) continue;
 
-      for (const template of shuffledTemplates) {
-        if (count >= MAX_MARKETS) break;
+        for (const direction of directions) {
 
-        const direction = Math.random() > 0.5 ? "UP" : "DOWN";
+          let percentMove;
 
-        const percentMove = TEST_MODE
-          ? Math.random() * 0.1 + 0.5
-          : Math.random() * 2 + 0.2;
+          if (TEST_MODE) {
+            percentMove = Math.random() * 0.5 + 0.5; // 0.5% → 1%
+          } else {
+            if (durationMinutes === 720) {
+              percentMove = Math.random() * 3 + 1; // 1% → 4%
+            } else if (durationMinutes === 1440) {
+              percentMove = Math.random() * 5 + 2; // 2% → 7%
+            }
+          }
 
-        let targetPrice =
-          direction === "UP"
-            ? currentPrice * (1 + percentMove / 100)
-            : currentPrice * (1 - percentMove / 100);
+          let targetPrice =
+            direction === "UP"
+              ? currentPrice * (1 + percentMove / 100)
+              : currentPrice * (1 - percentMove / 100);
 
-        targetPrice =
-          currentPrice < 1
-            ? Number(targetPrice.toFixed(8))
-            : Number(targetPrice.toFixed(2));
+          targetPrice =
+            currentPrice < 1
+              ? Number(targetPrice.toFixed(8))
+              : Number(targetPrice.toFixed(2));
 
-        const question = template
-          .replace("{asset}", asset)
-          .replace("{assetSymbol}", getSymbol(asset))
-          .replace("{directionWord}", getDirectionWord(direction))
-          .replace("{duration}", formatDuration(durationMinutes))
-          .replace("{percent}", percentMove.toFixed(2))
-          .replace("{target}", targetPrice)
-          .replace(
-            "{endTime}",
-            endDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          const question =
+            direction === "UP"
+              ? `Will ${getSymbol(asset)} be above $${targetPrice} in ${formatDuration(durationMinutes)}?`
+              : `Will ${getSymbol(asset)} be below $${targetPrice} in ${formatDuration(durationMinutes)}?`;
+
+          jobs.push(
+            createMarket({
+              asset,
+              question,
+              currentPrice,
+              targetPrice,
+              direction,
+              durationMinutes,
+              endDate
+            })
           );
-
-        jobs.push(createMarket({
-          asset,
-          question,
-          currentPrice,
-          targetPrice,
-          direction,
-          durationMinutes,
-          endDate
-        }));
-
-        count++;
+        }
       }
     }
 
     const delay = ms => new Promise(res => setTimeout(res, ms));
 
-    // 🚀 RUN ALL AT ONCE
     for (const job of jobs) {
       await job;
-      await delay(200); // add this
+      await delay(200);
     }
 
-
-    console.log(`🔥 ${jobs.length} markets created at same time`);
+    console.log(`🔥 ${jobs.length} markets created (expected: 20)`);
   } catch (err) {
     console.error("❌ Bulk generation failed:", err.message);
   }
 }
-
 
 
 

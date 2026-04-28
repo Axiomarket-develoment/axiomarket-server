@@ -121,9 +121,9 @@ async function fetchPrices() {
     try {
         const paprikaMap = {
             bitcoin: "btc-bitcoin",
-            // ethereum: "eth-ethereum",
-            // solana: "sol-solana",
-            // binancecoin: "bnb-binance-coin",
+            ethereum: "eth-ethereum",
+            solana: "sol-solana",
+            binancecoin: "bnb-binance-coin",
             "avalanche-2": "avax-avalanche",
             // dogecoin: "doge-dogecoin",
         };
@@ -153,12 +153,13 @@ async function fetchPrices() {
     // 🔵 CRYPTOCOMPARE FALLBACK
     // =======================
     try {
-        const symbolMap = {
-            bitcoin: "BTC",
-       
-            "avalanche-2": "AVAX",
-        
-        };
+      const symbolMap = {
+  bitcoin: "BTC",
+  ethereum: "ETH",
+  binancecoin: "BNB",
+  solana: "SOL",
+  "avalanche-2": "AVAX"
+};
 
         const prices = {};
 
