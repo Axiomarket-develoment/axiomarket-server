@@ -10,10 +10,19 @@ const { getPrice } = require("../price/priceOracle");
 // console.log("SUPPORTED_ASSETS:", SUPPORTED_ASSETS);
 
 // ✅ Set this to true to enable test mode
-const TEST_MODE = true;
+const TEST_MODE = false;
 
 function getDirectionWord(direction) {
   return direction === "UP" ? "up" : "down";
+}
+
+function getMarketAnchor() {
+  const now = new Date();
+
+  const anchor = new Date(now);
+  anchor.setHours(9, 0, 0, 0); // 9:00 AM FIXED DAILY START
+
+  return anchor;
 }
 
 function normalizeToken(token) {
@@ -213,15 +222,22 @@ async function createMarket({
   }
 }
 
-async function generateMarkets() {
+aasync function generateMarkets() {
   try {
-    const durations = [720, 1440]; // 12h and 24h
     const directions = ["UP", "DOWN"];
-
     const jobs = [];
 
-    for (const durationMinutes of durations) {
-      const endDate = getNextRoundTime(durationMinutes);
+    // 🧠 FIXED DAILY ANCHOR
+    const anchor = getMarketAnchor();
+
+    const endMap = {
+      720: new Date(anchor.getTime() + 12 * 60 * 60 * 1000),
+      1440: new Date(anchor.getTime() + 24 * 60 * 60 * 1000)
+    };
+
+    for (const durationMinutes of [720, 1440]) {
+
+      const endDate = endMap[durationMinutes];
 
       for (const asset of shuffledTokens) {
         const currentPrice = getPrice(asset);
@@ -232,12 +248,12 @@ async function generateMarkets() {
           let percentMove;
 
           if (TEST_MODE) {
-            percentMove = Math.random() * 0.5 + 0.5; // 0.5% → 1%
+            percentMove = Math.random() * 0.5 + 0.5;
           } else {
             if (durationMinutes === 720) {
-              percentMove = Math.random() * 3 + 1; // 1% → 4%
-            } else if (durationMinutes === 1440) {
-              percentMove = Math.random() * 5 + 2; // 2% → 7%
+              percentMove = Math.random() * 3 + 1;
+            } else {
+              percentMove = Math.random() * 5 + 2;
             }
           }
 
@@ -283,7 +299,6 @@ async function generateMarkets() {
     console.error("❌ Bulk generation failed:", err.message);
   }
 }
-
 
 
 module.exports = { generateMarkets, TEST_MODE };
