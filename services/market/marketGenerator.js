@@ -86,7 +86,8 @@ async function createMarket({
   targetPrice,
   direction,
   durationMinutes,
-  endDate
+  endDate,
+  cycleStart   
 }) {
   try {
     // 1️⃣ Create conversation first
@@ -284,7 +285,8 @@ const cycleStart = getMarketCycleStart();
               targetPrice,
               direction,
               durationMinutes,
-              endDate
+              endDate,
+              cycleStart   
             })
           );
         }
