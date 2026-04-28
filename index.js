@@ -68,6 +68,36 @@ app.use(session({
     sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
   }
 }));
+async function deleteAllLiveMarketsOnBoot() {
+  const Market = require("./models/Market");
+  const { adminDb } = require("./lib/firebaseAdmin");
+
+  try {
+    console.log("🧨 Boot cleanup: deleting LIVE markets...");
+
+    const liveMarkets = await Market.find({ status: "LIVE" });
+
+    console.log(`Found ${liveMarkets.length} LIVE markets`);
+
+    for (const market of liveMarkets) {
+      const id = market._id.toString();
+
+      await Market.findByIdAndDelete(id);
+
+      try {
+        await adminDb.collection("markets").doc(id).delete();
+      } catch (e) {
+        console.log("⚠️ Firestore delete skipped:", e.message);
+      }
+
+      console.log(`🗑 deleted: ${id}`);
+    }
+
+    console.log("✅ Boot cleanup complete");
+  } catch (err) {
+    console.error("❌ Boot delete failed:", err.message);
+  }
+}
 
 
 // ---------------- Passport ----------------
@@ -77,8 +107,9 @@ app.use(passport.session());
 // ---------------- MongoDB ----------------
 mongoose.set("strictQuery", true);
 mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 15000 })
-  .then( () => {
+  .then(() => {
     console.log("🟢 MongoDB connected successfully");
+    
     startMarketCron();
     startOracle()
 
