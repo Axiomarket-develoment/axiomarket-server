@@ -14,7 +14,7 @@ function startMarketCron() {
 
   // 🔵 15 MINUTE MARKETS
  // 🕘 DAILY MARKET GENERATION (9 AM)
-cron.schedule("51 9 * * *", async () => {
+cron.schedule("56 9 * * *", async () => {
   console.log("🌅 Generating markets...");
   await generateMarkets();
 }, {
