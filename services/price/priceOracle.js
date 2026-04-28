@@ -210,8 +210,8 @@ async function startOracle() {
 function getPrice(asset) {
     const data = priceCache.get(asset);
 
-if (!data || !data.price || isNaN(data.price))
-            console.log(`❌ Cache miss: ${asset}`);
+    if (!data || !data.price || isNaN(data.price)) {
+        console.log(`❌ Cache miss: ${asset}`);
         return null;
     }
 
