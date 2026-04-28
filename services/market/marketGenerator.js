@@ -203,7 +203,7 @@ async function createMarket({
       tradeCount: plainMarket.tradeCount || 0,
       status: plainMarket.status,
 
-      startDate: plainMarket.startDate.getTime(),
+startDate: cycleStart
       endDate: plainMarket.endDate.getTime(),
       durationMinutes: plainMarket.durationMinutes,
 
