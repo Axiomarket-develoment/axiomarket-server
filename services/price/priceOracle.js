@@ -67,34 +67,38 @@ function updateCache(data) {
     let updated = 0;
 
     for (const asset of ASSETS) {
+
         const price = data?.[asset]?.usd;
 
-        if (typeof price === "number" && !isNaN(price)) {
+        if (typeof price === "number") {
             priceCache.set(asset, {
                 price,
                 timestamp: Date.now()
             });
             updated++;
-        } else {
-            console.log(`⚠️ Missing price for ${asset}`);
         }
     }
 
-    // 🔥 IMPORTANT FIX: prevent silent overwrite of good cache
     if (updated === 0) {
         console.log("⚠️ No valid prices received — keeping old cache");
-        return;
+    } else {
+        console.log("📦 Cache updated:", [...priceCache.entries()]);
     }
-
-    console.log("📦 Cache updated size:", priceCache.size);
 }
 
 // ===============================
 // FETCH PRICES
 // ===============================
 async function fetchPrices() {
-    const ids = ASSETS.join(",");
+const coinGeckoMap = {
+  bitcoin: "bitcoin",
+  ethereum: "ethereum",
+  binancecoin: "binancecoin",
+  solana: "solana",
+  "avalanche-2": "avalanche-2"
+};
 
+const ids = Object.values(coinGeckoMap).join(",");
     // =======================
     // 🟢 COINGECKO PRIMARY
     // =======================
@@ -206,8 +210,8 @@ async function startOracle() {
 function getPrice(asset) {
     const data = priceCache.get(asset);
 
-    if (!data || typeof data.price !== "number") {
-        console.log(`❌ Cache miss: ${asset}`);
+if (!data || !data.price || isNaN(data.price))
+            console.log(`❌ Cache miss: ${asset}`);
         return null;
     }
 
