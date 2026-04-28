@@ -222,7 +222,7 @@ async function createMarket({
   }
 }
 
-aasync function generateMarkets() {
+async function generateMarkets() {
   try {
     const directions = ["UP", "DOWN"];
     const jobs = [];
