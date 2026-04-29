@@ -104,24 +104,43 @@ function formatDuration(minutes) {
 const getMarketEndDate = (durationMinutes) => {
   const now = new Date();
 
-  const today9AM = new Date(now);
-  today9AM.setHours(9, 0, 0, 0);
+  const today10AM = new Date(now);
+  today10AM.setHours(10, 0, 0, 0);
 
-  const today9PM = new Date(now);
-  today9PM.setHours(21, 0, 0, 0);
+  const today10PM = new Date(now);
+  today10PM.setHours(22, 0, 0, 0);
 
-  const tomorrow9AM = new Date(today9AM);
-  tomorrow9AM.setDate(tomorrow9AM.getDate() + 1);
+  const tomorrow10AM = new Date(today10AM);
+  tomorrow10AM.setDate(tomorrow10AM.getDate() + 1);
 
   switch (durationMinutes) {
     case 720:
-      return today9PM;
+      return today10PM;
     case 1440:
-      return tomorrow9AM;
+      return tomorrow10AM;
     default:
       return new Date(now.getTime() + durationMinutes * 60 * 1000);
   }
 };
+
+function getMarketStartDate() {
+  const now = new Date();
+
+  const today10AM = new Date(now);
+  today10AM.setHours(10, 0, 0, 0);
+
+  // if cron runs before 10 → use today 10
+  if (now < today10AM) {
+    return today10AM;
+  }
+
+  // if after 10 → use next day's 10
+  const tomorrow10AM = new Date(today10AM);
+  tomorrow10AM.setDate(tomorrow10AM.getDate() + 1);
+
+  return tomorrow10AM;
+}
+
 async function createMarket({
   asset,
   question,
@@ -130,7 +149,7 @@ async function createMarket({
   direction,
   durationMinutes,
   endDate,
-  cycleStart   
+  cycleStart
 }) {
 
 
@@ -177,7 +196,7 @@ async function createMarket({
         direction
       },
 
-      startDate:   new Date(),
+      startDate,
       endDate,
       durationMinutes,
       status: "LIVE"
@@ -249,8 +268,8 @@ async function createMarket({
       tradeCount: plainMarket.tradeCount || 0,
       status: plainMarket.status,
 
-startDate: plainMarket.startDate.getTime(),
-endDate: plainMarket.endDate.getTime(),
+      startDate,
+      endDate: plainMarket.endDate.getTime(),
       durationMinutes: plainMarket.durationMinutes,
 
 
@@ -275,60 +294,53 @@ endDate: plainMarket.endDate.getTime(),
 
 async function generateMarkets() {
   try {
-    const directions = ["UP", "DOWN"];
+    const directions = ["UP"];
     const jobs = [];
+    const startDate = getMarketStartDate();
 
     // 🧠 FIXED DAILY ANCHOR
 
     for (const durationMinutes of [720, 1440]) {
 
-const endDate = getMarketEndDate(durationMinutes);
+      const endDate = getMarketEndDate(durationMinutes);
       for (const asset of shuffledTokens) {
         const currentPrice = getPrice(asset);
         if (!currentPrice) continue;
 
-        for (const direction of directions) {
+        const direction = "UP";
+        let percentMove;
 
-          let percentMove;
-
-          if (TEST_MODE) {
-            percentMove = Math.random() * 0.5 + 0.5;
+        if (TEST_MODE) {
+          percentMove = Math.random() * 0.5 + 0.5;
+        } else {
+          if (durationMinutes === 720) {
+            percentMove = Math.random() * 3 + 1;
           } else {
-            if (durationMinutes === 720) {
-              percentMove = Math.random() * 3 + 1;
-            } else {
-              percentMove = Math.random() * 5 + 2;
-            }
+            percentMove = Math.random() * 5 + 2;
           }
-
-          let targetPrice =
-            direction === "UP"
-              ? currentPrice * (1 + percentMove / 100)
-              : currentPrice * (1 - percentMove / 100);
-
-          targetPrice =
-            currentPrice < 1
-              ? Number(targetPrice.toFixed(8))
-              : Number(targetPrice.toFixed(2));
-
-          const question =
-            direction === "UP"
-              ? `Will ${getSymbol(asset)} be above $${targetPrice} in ${formatDuration(durationMinutes)}?`
-              : `Will ${getSymbol(asset)} be below $${targetPrice} in ${formatDuration(durationMinutes)}?`;
-
-          jobs.push(
-            createMarket({
-              asset,
-              question,
-              currentPrice,
-              targetPrice,
-              direction,
-              durationMinutes,
-              endDate,
-                 
-            })
-          );
         }
+
+        let targetPrice = currentPrice * (1 + percentMove / 100);
+
+        targetPrice =
+          currentPrice < 1
+            ? Number(targetPrice.toFixed(8))
+            : Number(targetPrice.toFixed(2));
+
+        const question = `Will ${getSymbol(asset)} be above $${targetPrice} in ${formatDuration(durationMinutes)}?`;
+        jobs.push(
+          createMarket({
+            asset,
+            question,
+            currentPrice,
+            targetPrice,
+            direction,
+            durationMinutes,
+            endDate,
+startDate
+          })
+        );
+
       }
     }
 

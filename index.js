@@ -99,6 +99,43 @@ async function deleteAllLiveMarketsOnBoot() {
   }
 }
 
+async function deleteAllLiveMarketsOnBoot() {
+  const Market = require("./models/Market");
+  const { adminDb } = require("./lib/firebaseAdmin");
+
+  try {
+    console.log("🧨 Boot cleanup: deleting LIVE markets...");
+
+    const liveMarkets = await Market.find({ status: "LIVE" }).select("_id");
+
+    console.log(`Found ${liveMarkets.length} LIVE markets`);
+
+    if (liveMarkets.length === 0) {
+      console.log("✅ No LIVE markets to delete");
+      return;
+    }
+
+    const ids = liveMarkets.map(m => m._id.toString());
+
+    // ✅ Bulk delete Mongo (FAST)
+    await Market.deleteMany({ _id: { $in: ids } });
+
+    // ✅ Firestore deletes (parallel)
+    const deletePromises = ids.map(id =>
+      adminDb.collection("markets").doc(id).delete().catch(e => {
+        console.log(`⚠️ Firestore skip ${id}:`, e.message);
+      })
+    );
+
+    await Promise.all(deletePromises);
+
+    console.log(`🗑 Deleted ${ids.length} LIVE markets`);
+    console.log("✅ Boot cleanup complete");
+
+  } catch (err) {
+    console.error("❌ Boot delete failed:", err.message);
+  }
+}
 
 // ---------------- Passport ----------------
 app.use(passport.initialize());
@@ -107,11 +144,15 @@ app.use(passport.session());
 // ---------------- MongoDB ----------------
 mongoose.set("strictQuery", true);
 mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 15000 })
-  .then(() => {
+  .then( () => {
     console.log("🟢 MongoDB connected successfully");
-    
+
+    // ✅ RUN CLEANUP FIRST
+    // await deleteAllLiveMarketsOnBoot();
+
+    // ✅ THEN START SYSTEMS
     startMarketCron();
-    startOracle()
+    startOracle();
 
     setInterval(syncWalletBalances, 30000);
   })

@@ -29,6 +29,7 @@
     "jwks-rsa": "^4.0.1",
     "mongoose": "^9.2.1",
     "node-cron": "^4.2.1",
+    "nodemailer": "^8.0.7",
     "nodemon": "^3.1.11",
     "openai": "^6.32.0",
     "passport": "^0.7.0",
