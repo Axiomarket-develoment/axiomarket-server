@@ -137,7 +137,7 @@ router.post("/user_enter_market", async (req, res) => {
         }
 
         const [user, market] = await Promise.all([
-            User.findById(userId).select("balance email"),
+            User.findById(userId).select("balance email avaxBalance"),
             Market.findById(marketId)
         ]);
 
@@ -169,6 +169,36 @@ router.post("/user_enter_market", async (req, res) => {
             });
         }
 
+        const avaxPrice = await getPrice("avalanche-2");
+
+        if (!avaxPrice) {
+            return res.status(500).json({
+                message: "Price service failed"
+            });
+        }
+
+        const avaxAmount = Number(amount);
+        const usdAmount = avaxAmount * avaxPrice;
+
+        const fee = usdAmount * 0.05;
+        const netUsd = usdAmount - fee;
+
+        const roundTo2 = (num) => Math.floor(num * 100) / 100;
+
+        if (netUsd <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid trade amount"
+            });
+        }
+
+        if (user.balance.testnet < usdAmount) {
+            return res.status(400).json({
+                success: false,
+                message: "Insufficient balance"
+            });
+        }
+
         const subMarket = market.subMarkets.id(subMarketId);
 
         if (!subMarket) {
@@ -178,51 +208,21 @@ router.post("/user_enter_market", async (req, res) => {
             });
         }
 
-        // =========================
-        // ✅ FEE IMPLEMENTATION (ADDED ONLY)
-        // =========================
-        const FEE_RATE = 0.05;
-        const amountNum = Number(amount);
-        const fee = amountNum * FEE_RATE;
-        const netAmount = amountNum - fee;
+        // ======================
+        // BALANCE UPDATE (FIXED)
+        // ======================
+        user.balance.testnet -= usdAmount;
+        user.balance.locked += netUsd;
 
+        user.avaxBalance = roundTo2(user.avaxBalance - avaxAmount);
 
-        const roundTo2 = (num) => Math.floor(num * 100) / 100;
-        const avaxPrice = getPrice("avalanche-2");
-
-
-        // optional safety
-        if (netAmount <= 0) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid trade amount"
-            });
-        }
-
+        // stats
         let stats = await Stats.findOne();
-
-        if (!stats) {
-            stats = await Stats.create({});
-        }
-
+        if (!stats) stats = await Stats.create({});
         stats.totalFees += fee;
         await stats.save();
 
-        // balance check stays SAME (user pays full amount)
-        if (user.balance.testnet < amountNum) {
-            return res.status(400).json({
-                success: false,
-                message: "Insufficient balance"
-            });
-        }
-
-        // lock funds (UNCHANGED logic)
-        user.balance.testnet -= amountNum;
-        user.balance.locked += netAmount;
-
-        const avaxAmount = amountNum / avaxPrice;
-        user.avaxBalance = roundTo2(user.avaxBalance - avaxAmount);
-
+        // outcome logic
         const selectedOutcome = subMarket.outcomes.find(
             o => o.label.toLowerCase() === outcome.toLowerCase()
         );
@@ -234,11 +234,10 @@ router.post("/user_enter_market", async (req, res) => {
             });
         }
 
-        // update stats (UNCHANGED except using amount as before)
-        selectedOutcome.pool += amountNum;
+        selectedOutcome.pool += usdAmount;
         selectedOutcome.count += 1;
-        selectedOutcome.volume += amountNum;
-        selectedOutcome.liquidity += amountNum;
+        selectedOutcome.volume += usdAmount;
+        selectedOutcome.liquidity += usdAmount;
 
         const totalPool = subMarket.outcomes.reduce((a, o) => a + o.pool, 0);
         const MIN_PERCENT = 20;
@@ -272,58 +271,20 @@ router.post("/user_enter_market", async (req, res) => {
         });
 
         subMarket.tradeCount += 1;
-        subMarket.totalVolume += amountNum;
+        subMarket.totalVolume += usdAmount;
 
-        market.tradeCount = (market.tradeCount || 0) + 1;
-        market.totalVolume = (market.totalVolume || 0) + amountNum;
+        market.tradeCount += 1;
+        market.totalVolume += usdAmount;
 
         const position = await Position.create({
             userId,
             marketId,
             subMarketId,
             outcome,
-            amount: amountNum
+            amount: avaxAmount
         });
 
-        await Promise.all([
-            market.save()
-        ]);
-
-        // Firestore update (UNCHANGED)
-        // try {
-        //     const marketRef = adminDb.collection("markets").doc(marketId);
-
-        //     const updatedSubMarkets = market.subMarkets.map(sub => {
-        //         if (sub._id.toString() !== subMarketId.toString()) return sub;
-
-        //         return {
-        //             id: sub._id.toString(),
-        //             question: sub.question,
-        //             marketType: sub.marketType,
-        //             status: sub.status,
-        //             outcomes: subMarket.outcomes.map(o => ({
-        //                 label: o.label,
-        //                 pool: o.pool,
-        //                 count: o.count,
-        //                 volume: o.volume,
-        //                 liquidity: o.liquidity,
-        //                 percentage: o.percentage
-        //             })),
-        //             tradeCount: subMarket.tradeCount,
-        //             totalVolume: subMarket.totalVolume
-        //         };
-        //     });
-
-        //     await marketRef.update({
-        //         subMarkets: updatedSubMarkets,
-        //         totalVolume: market.totalVolume,
-        //         tradeCount: market.tradeCount
-        //     });
-
-        // } catch (e) {
-        //     console.error("Firestore update failed:", e.message);
-        // }
-
+        await market.save();
 
         await User.updateOne(
             { _id: user._id },
@@ -331,10 +292,12 @@ router.post("/user_enter_market", async (req, res) => {
                 $set: {
                     "balance.testnet": roundTo2(user.balance.testnet),
                     "balance.locked": roundTo2(user.balance.locked),
+                    avaxBalance: roundTo2(user.avaxBalance),
                     lastBalanceUpdate: Date.now()
                 }
             }
         );
+
         const safeUser = await User.findById(userId).select("-password");
 
         return res.json({
@@ -342,9 +305,9 @@ router.post("/user_enter_market", async (req, res) => {
             message: "Trade placed successfully",
             data: {
                 positionId: position._id,
-                amount: Number(amountNum.toFixed(2)),
-                fee: Number(fee.toFixed(2)),           // ✅ ADDED
-                netAmount: Number(netAmount.toFixed(2)), // ✅ ADDED
+                amount: avaxAmount,
+                fee: Number(fee.toFixed(2)),
+                netAmount: Number(netUsd.toFixed(2)),
                 balance: safeUser.balance,
                 user: safeUser
             }
@@ -352,7 +315,6 @@ router.post("/user_enter_market", async (req, res) => {
 
     } catch (err) {
         console.error(err);
-
         return res.status(500).json({
             success: false,
             message: err.message || "Something went wrong"
