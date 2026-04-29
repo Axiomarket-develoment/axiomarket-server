@@ -149,9 +149,20 @@ async function createMarket({
   direction,
   durationMinutes,
   endDate,
-  cycleStart
+  cycleStart,
+  startDate,
 }) {
 
+  const exists = await Market.findOne({
+    "metadata.asset": asset,
+    durationMinutes,
+    startDate
+  });
+
+  if (exists) {
+    console.log(`⏭ Skipping ${asset} (${durationMinutes}) — already exists`);
+    return null;
+  }
 
   try {
     // 1️⃣ Create conversation first
@@ -268,7 +279,7 @@ async function createMarket({
       tradeCount: plainMarket.tradeCount || 0,
       status: plainMarket.status,
 
-      startDate,
+      startDate: plainMarket.startDate.getTime(),
       endDate: plainMarket.endDate.getTime(),
       durationMinutes: plainMarket.durationMinutes,
 
@@ -337,7 +348,7 @@ async function generateMarkets() {
             direction,
             durationMinutes,
             endDate,
-startDate
+            startDate
           })
         );
 
@@ -346,10 +357,15 @@ startDate
 
     const delay = ms => new Promise(res => setTimeout(res, ms));
 
+    const results = [];
+
     for (const job of jobs) {
-      await job;
+      const res = await job;
+      if (res) results.push(res);
       await delay(200);
     }
+
+    console.log(`🔥 ${results.length} markets created`);
 
     console.log(`🔥 ${jobs.length} markets created (expected: 20)`);
   } catch (err) {

@@ -10,21 +10,42 @@ const Fill = require("../models/Fill");
 
 function startMarketCron() {
 
+  let generatingMarkets = false;
+
   // 🟢 5 MINUTE MARKETS
 
   // 🔵 15 MINUTE MARKETS
- // 🕘 DAILY MARKET GENERATION (9 AM)
-cron.schedule("4 10 * * *", async () => {
-  console.log("🌅 Generating markets...");
-  await generateMarkets();
-}, {
-  timezone: "Africa/Lagos"
-});
+  // 🕘 DAILY MARKET GENERATION (9 AM)
+  cron.schedule("*/5 * * * *", async () => {
+    try {
+      console.log("🛟 Checking market health...");
 
+      const liveCount = await Market.countDocuments({ status: "LIVE" });
+
+      console.log(`📊 Live markets: ${liveCount}`);
+
+      if (liveCount < 5 && !generatingMarkets) {
+        generatingMarkets = true;
+
+        console.log("⚠️ Low market count — triggering regeneration...");
+
+        try {
+          await generateMarkets();
+        } catch (err) {
+          console.error("❌ generateMarkets failed:", err.message);
+        } finally {
+          generatingMarkets = false; // 🔥 always reset
+        }
+      }
+
+    } catch (err) {
+      console.error("❌ Market health check failed:", err.message);
+    }
+  });
 
 
   // 🔴 END MARKETS (runs every minute)
-cron.schedule("0 */2 * * *", async () => {
+  cron.schedule("0 */2 * * *", async () => {
     const now = new Date();
 
     const markets = await Market.find({
@@ -41,45 +62,45 @@ cron.schedule("0 */2 * * *", async () => {
   });
 
   // 🟣 SETTLEMENT EVERY 12 HOURS
-// 🟣 SETTLEMENT EVERY 2 HOURS
-cron.schedule("0 */2 * * *", async () => {
-  console.log("🏁 Running 2-hour settlement...");
+  // 🟣 SETTLEMENT EVERY 2 HOURS
+  cron.schedule("0 */2 * * *", async () => {
+    console.log("🏁 Running 2-hour settlement...");
 
-  const markets = await Market.find({
-    status: "ENDED",
-    result: null,
-    processing: { $ne: true }
-  });
+    const markets = await Market.find({
+      status: "ENDED",
+      result: null,
+      processing: { $ne: true }
+    });
 
-  for (const market of markets) {
-    try {
-      // 🔒 lock
-      market.processing = true;
-      await market.save();
+    for (const market of markets) {
+      try {
+        // 🔒 lock
+        market.processing = true;
+        await market.save();
 
-      const outcome = await fetchOutcomeFromOracle(market);
+        const outcome = await fetchOutcomeFromOracle(market);
 
-      if (!outcome) {
+        if (!outcome) {
+          market.processing = false;
+          await market.save();
+          console.log("⚠️ No outcome, skipping");
+          continue;
+        }
+
+        await settleMarket(market, outcome);
+
+        // 🔓 unlock
         market.processing = false;
         await market.save();
-        console.log("⚠️ No outcome, skipping");
-        continue;
+
+        console.log(`✅ Settled: ${market._id}`);
+      } catch (err) {
+        market.processing = false;
+        await market.save();
+        console.error("❌ Settlement failed:", err.message);
       }
-
-      await settleMarket(market, outcome);
-
-      // 🔓 unlock
-      market.processing = false;
-      await market.save();
-
-      console.log(`✅ Settled: ${market._id}`);
-    } catch (err) {
-      market.processing = false;
-      await market.save();
-      console.error("❌ Settlement failed:", err.message);
     }
-  }
-});
+  });
 
 
 

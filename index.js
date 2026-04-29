@@ -143,16 +143,15 @@ app.use(passport.session());
 
 // ---------------- MongoDB ----------------
 mongoose.set("strictQuery", true);
-mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 15000 })
-  .then( () => {
+mongoose.connect(MONGO_URI)
+  .then(async () => {
     console.log("🟢 MongoDB connected successfully");
 
-    // ✅ RUN CLEANUP FIRST
-    // await deleteAllLiveMarketsOnBoot();
+    // ✅ WAIT for oracle to fill cache FIRST
+    await startOracle();
 
-    // ✅ THEN START SYSTEMS
+    // ✅ THEN start cron
     startMarketCron();
-    startOracle();
 
     setInterval(syncWalletBalances, 30000);
   })
