@@ -68,9 +68,14 @@ function updateCache(data) {
 
     for (const asset of ASSETS) {
 
-        const price = data?.[asset]?.usd;
+        const raw = data?.[asset];
 
-        if (typeof price === "number") {
+        const price =
+            raw?.usd ??      // CoinGecko / CoinPaprika
+            raw?.USD ??      // CryptoCompare
+            raw;             // fallback direct number
+
+        if (typeof price === "number" && !isNaN(price)) {
             priceCache.set(asset, {
                 price,
                 timestamp: Date.now()
@@ -79,11 +84,13 @@ function updateCache(data) {
         }
     }
 
+    
     if (updated === 0) {
         console.log("⚠️ No valid prices received — keeping old cache");
-    } else {
-        console.log("📦 Cache updated:", [...priceCache.entries()]);
+        return;
     }
+
+    console.log("📦 Cache updated:", [...priceCache.entries()]);
 }
 
 // ===============================

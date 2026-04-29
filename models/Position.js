@@ -10,7 +10,9 @@ const PositionSchema = new mongoose.Schema({
   outcome:              { type: String, required: true },
 
   // shares:               { type: Number, required: true },
-  amount:               { type: Number, required: true }
+  amount:               { type: Number, required: true },
+  fee:                  { type: Number, required: true },
+  grossAmount:          { type: Number, required: true }
 }, 
       { timestamps: true }
 );

@@ -281,7 +281,9 @@ router.post("/user_enter_market", async (req, res) => {
             marketId,
             subMarketId,
             outcome,
-            amount: avaxAmount
+            amount: Number(netUsd.toFixed(2)), // ✅ USD AFTER FEE
+            fee: Number(fee.toFixed(2)),       // ✅ optional but smart
+            grossAmount: Number(usdAmount.toFixed(2)) // ✅ optional (before fee)
         });
 
         await market.save();
