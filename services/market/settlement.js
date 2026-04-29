@@ -2,7 +2,7 @@ const Market = require("../../models/Market");
 const Order = require("../../models/Order");
 const Fill = require("../../models/Fill");
 const User = require("../../models/User");
-const { adminDb } = require("../../lib/firebaseAdmin");
+// const { adminDb } = require("../../lib/firebaseAdmin");
 const syncUserBalance = require("../../functions/syncUserBalance");
 const Position = require("../../models/Position");
 
@@ -118,25 +118,25 @@ async function settleMarket(market, winningOutcomeLabel) {
     console.log("\n📦 Market status updated to SETTLED");
 
     // 6️⃣ Firestore sync
-    await adminDb.collection("markets").doc(market._id.toString()).set({
-        status: market.status,
-        result: market.result,
-        subMarkets: market.subMarkets.map(sub => ({
-            id: sub._id.toString(),
-            outcomes: sub.outcomes.map(o => ({
-                label: o.label,
-                result: o.result,
-                odds: o.odds,
-                liquidity: o.liquidity,
-                volume: o.volume,
-                pool: Number(o.pool.toFixed(2)),
-                count: o.count
-            })),
-            status: sub.status,
-            totalVolume: Number(sub.totalVolume.toFixed(2)),
-            tradeCount: sub.tradeCount
-        }))
-    }, { merge: true });
+    // await adminDb.collection("markets").doc(market._id.toString()).set({
+    //     status: market.status,
+    //     result: market.result,
+    //     subMarkets: market.subMarkets.map(sub => ({
+    //         id: sub._id.toString(),
+    //         outcomes: sub.outcomes.map(o => ({
+        //             label: o.label,
+        //             result: o.result,
+        //             odds: o.odds,
+        //             liquidity: o.liquidity,
+        //             volume: o.volume,
+        //             pool: Number(o.pool.toFixed(2)),
+        //             count: o.count
+        //         })),
+        //         status: sub.status,
+        //         totalVolume: Number(sub.totalVolume.toFixed(2)),
+        //         tradeCount: sub.tradeCount
+        //     }))
+        // }, { merge: true });
 
     console.log("☁️ Firestore updated");
 

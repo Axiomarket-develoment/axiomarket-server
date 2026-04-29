@@ -5,7 +5,7 @@ const Conversation = require("../models/conversation");
 const Message = require("../models/Message");
 const { fetchOutcomeFromOracle } = require("../utils/oracle");
 const { settleMarket } = require("../services/market/settlement");
-const { adminDb } = require("../lib/firebaseAdmin");
+// const { adminDb } = require("../lib/firebaseAdmin");
 const Fill = require("../models/Fill");
 
 function startMarketCron() {

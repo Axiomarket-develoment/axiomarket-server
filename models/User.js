@@ -15,10 +15,20 @@ const UserSchema = new mongoose.Schema({
                           testnet: { type: Number, default: 0 },
                           locked:  { type: Number, default: 0 }
                         },
-  savedMarket:          {type: mongoose.Schema.Types.ObjectId, ref: "Market" },
+                
+  savedMarkets:         { 
+                          type:    [{type: mongoose.Schema.Types.ObjectId, ref: "Market" }],
+                          default: []
+                        },
 
   referredBy:           {type: mongoose.Schema.Types.ObjectId, ref: "User" },
   isAmbassador:         {type: Boolean, default: false},
+
+  avaxBalance:          { type: Number, default: 0 },
+  usdBalance:           { type: Number, default: 0 },
+  lastBalanceUpdate:    { type: Number },
+  lastLogin:            { type: Number },
+
   referralCode:         {type: String, unique: true, sparse: true},
   totalReferrals:       {type: Number, default: 0},
   totalEarnings:        {type: Number, default: 0},

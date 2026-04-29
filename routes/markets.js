@@ -7,12 +7,13 @@ const User = require("../models/User");
 const Order = require("../models/Order");
 const Position = require("../models/Position");
 const axios = require("axios")
-const { adminDb } = require("../lib/firebaseAdmin");
+// const { adminDb } = require("../lib/firebaseAdmin");
 const Fill = require("../models/Fill");
 const { TOKEN_CHART_SYMBOLS } = require("../confiq/assets");
 const syncUserBalance = require("../functions/syncUserBalance");
 const Ambassador = require("../models/Ambassador");
 const Stats = require("../models/Stats");
+const { getPrice } = require("../services/price/priceOracle");
 
 
 
@@ -181,9 +182,13 @@ router.post("/user_enter_market", async (req, res) => {
         // ✅ FEE IMPLEMENTATION (ADDED ONLY)
         // =========================
         const FEE_RATE = 0.05;
-        const fee = amount * FEE_RATE;
-        const netAmount = amount - fee;
+        const amountNum = Number(amount);
+        const fee = amountNum * FEE_RATE;
+        const netAmount = amountNum - fee;
 
+
+        const roundTo2 = (num) => Math.floor(num * 100) / 100;
+        const avaxPrice = getPrice("avalanche-2");
 
 
         // optional safety
@@ -204,7 +209,7 @@ router.post("/user_enter_market", async (req, res) => {
         await stats.save();
 
         // balance check stays SAME (user pays full amount)
-        if (user.balance.testnet < amount) {
+        if (user.balance.testnet < amountNum) {
             return res.status(400).json({
                 success: false,
                 message: "Insufficient balance"
@@ -212,8 +217,11 @@ router.post("/user_enter_market", async (req, res) => {
         }
 
         // lock funds (UNCHANGED logic)
-        user.balance.testnet -= amount;
+        user.balance.testnet -= amountNum;
         user.balance.locked += netAmount;
+
+        const avaxAmount = amountNum / avaxPrice;
+        user.avaxBalance = roundTo2(user.avaxBalance - avaxAmount);
 
         const selectedOutcome = subMarket.outcomes.find(
             o => o.label.toLowerCase() === outcome.toLowerCase()
@@ -227,10 +235,10 @@ router.post("/user_enter_market", async (req, res) => {
         }
 
         // update stats (UNCHANGED except using amount as before)
-        selectedOutcome.pool += amount;
+        selectedOutcome.pool += amountNum;
         selectedOutcome.count += 1;
-        selectedOutcome.volume += amount;
-        selectedOutcome.liquidity += amount;
+        selectedOutcome.volume += amountNum;
+        selectedOutcome.liquidity += amountNum;
 
         const totalPool = subMarket.outcomes.reduce((a, o) => a + o.pool, 0);
         const MIN_PERCENT = 20;
@@ -264,60 +272,69 @@ router.post("/user_enter_market", async (req, res) => {
         });
 
         subMarket.tradeCount += 1;
-        subMarket.totalVolume += amount;
+        subMarket.totalVolume += amountNum;
 
         market.tradeCount = (market.tradeCount || 0) + 1;
-        market.totalVolume = (market.totalVolume || 0) + amount;
+        market.totalVolume = (market.totalVolume || 0) + amountNum;
 
         const position = await Position.create({
             userId,
             marketId,
             subMarketId,
             outcome,
-            amount
+            amount: amountNum
         });
 
         await Promise.all([
-            user.save(),
             market.save()
         ]);
 
         // Firestore update (UNCHANGED)
-        try {
-            const marketRef = adminDb.collection("markets").doc(marketId);
+        // try {
+        //     const marketRef = adminDb.collection("markets").doc(marketId);
 
-            const updatedSubMarkets = market.subMarkets.map(sub => {
-                if (sub._id.toString() !== subMarketId.toString()) return sub;
+        //     const updatedSubMarkets = market.subMarkets.map(sub => {
+        //         if (sub._id.toString() !== subMarketId.toString()) return sub;
 
-                return {
-                    id: sub._id.toString(),
-                    question: sub.question,
-                    marketType: sub.marketType,
-                    status: sub.status,
-                    outcomes: subMarket.outcomes.map(o => ({
-                        label: o.label,
-                        pool: o.pool,
-                        count: o.count,
-                        volume: o.volume,
-                        liquidity: o.liquidity,
-                        percentage: o.percentage
-                    })),
-                    tradeCount: subMarket.tradeCount,
-                    totalVolume: subMarket.totalVolume
-                };
-            });
+        //         return {
+        //             id: sub._id.toString(),
+        //             question: sub.question,
+        //             marketType: sub.marketType,
+        //             status: sub.status,
+        //             outcomes: subMarket.outcomes.map(o => ({
+        //                 label: o.label,
+        //                 pool: o.pool,
+        //                 count: o.count,
+        //                 volume: o.volume,
+        //                 liquidity: o.liquidity,
+        //                 percentage: o.percentage
+        //             })),
+        //             tradeCount: subMarket.tradeCount,
+        //             totalVolume: subMarket.totalVolume
+        //         };
+        //     });
 
-            await marketRef.update({
-                subMarkets: updatedSubMarkets,
-                totalVolume: market.totalVolume,
-                tradeCount: market.tradeCount
-            });
+        //     await marketRef.update({
+        //         subMarkets: updatedSubMarkets,
+        //         totalVolume: market.totalVolume,
+        //         tradeCount: market.tradeCount
+        //     });
 
-        } catch (e) {
-            console.error("Firestore update failed:", e.message);
-        }
+        // } catch (e) {
+        //     console.error("Firestore update failed:", e.message);
+        // }
 
-        await syncUserBalance(user);
+
+        await User.updateOne(
+            { _id: user._id },
+            {
+                $set: {
+                    "balance.testnet": roundTo2(user.balance.testnet),
+                    "balance.locked": roundTo2(user.balance.locked),
+                    lastBalanceUpdate: Date.now()
+                }
+            }
+        );
         const safeUser = await User.findById(userId).select("-password");
 
         return res.json({
@@ -325,10 +342,10 @@ router.post("/user_enter_market", async (req, res) => {
             message: "Trade placed successfully",
             data: {
                 positionId: position._id,
-                amount: Number(amount.toFixed(2)),
+                amount: Number(amountNum.toFixed(2)),
                 fee: Number(fee.toFixed(2)),           // ✅ ADDED
                 netAmount: Number(netAmount.toFixed(2)), // ✅ ADDED
-                balance: user.balance,
+                balance: safeUser.balance,
                 user: safeUser
             }
         });
@@ -345,39 +362,80 @@ router.post("/user_enter_market", async (req, res) => {
 
 router.post("/save_market", async (req, res) => {
     try {
-        const { token, marketId, action } = req.body; // action = "save" | "unsave"
+        const { token, marketId, action } = req.body;
+
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         const userId = decoded.id || decoded.userId || decoded._id;
 
         if (!userId) {
             return res.status(401).json({ error: "Invalid token payload" });
         }
+
         const user = await User.findById(userId);
         if (!user) return res.status(404).json({ error: "User not found" });
 
-        // MongoDB
-        user.savedMarket = action === "save" ? marketId : null;
-        await user.save();
+        // ✅ ensure array exists
+        if (!user.savedMarkets) user.savedMarkets = [];
 
-        // Firestore
-        const userDoc = adminDb.collection("users").doc(user._id.toString());
-        const userSnap = await userDoc.get();
-        if (userSnap.exists) {
-            let savedMarkets = userSnap.data().savedMarkets || [];
-            if (action === "save" && !savedMarkets.includes(marketId)) {
-                savedMarkets.push(marketId);
-            } else if (action === "unsave") {
-                savedMarkets = savedMarkets.filter(id => id !== marketId);
+        if (action === "save") {
+            if (!user.savedMarkets.includes(marketId)) {
+                user.savedMarkets.push(marketId);
             }
-            await userDoc.update({ savedMarkets });
+        }
+        else if (action === "unsave") {
+            user.savedMarkets = user.savedMarkets.filter(
+                (id) => id.toString() !== marketId
+            );
         }
 
-        res.json({ success: true, action, savedMarket: user.savedMarket });
+        await user.save();
+
+        res.json({
+            success: true,
+            action,
+            savedMarkets: user.savedMarkets
+        });
+
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: err.message });
     }
 });
+
+router.post("/saved_market", async (req, res) => {
+    try {
+        const { userId } = req.body;
+
+        if (!userId) {
+            return res.status(400).json({
+                success: false,
+                message: "userId is required",
+            });
+        }
+
+        const user = await User.findById(userId).populate("savedMarkets");
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found",
+            });
+        }
+
+        return res.json({
+            success: true,
+            savedMarkets: user.savedMarkets || [],
+        });
+
+    } catch (err) {
+        console.error("saved_market error:", err);
+        res.status(500).json({
+            success: false,
+            message: err.message,
+        });
+    }
+});
+
 
 
 module.exports = router;

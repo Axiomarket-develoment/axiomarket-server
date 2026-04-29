@@ -5,7 +5,7 @@ const bcrypt = require("bcryptjs");
 const fetch = require("node-fetch");
 
 const User = require("../models/User");
-const { adminDb } = require("../lib/firebaseAdmin");
+// const { adminDb } = require("../lib/firebaseAdmin");
 
 const jwt = require("jsonwebtoken");
 
@@ -16,38 +16,56 @@ const JWT_SECRET = process.env.JWT_SECRET;
 // ==========================
 const { getPrice } = require("../services/price/priceOracle");
 
-const syncUserToFirestore = async (user, provider) => {
-    const plainUser = user.toObject ? user.toObject() : user;
+// const syncUserToFirestore = async (user, provider) => {
+//     const plainUser = user.toObject ? user.toObject() : user;
 
-    const avaxPrice = getPrice("avalanche-2") || 0;
+//     const avaxPrice = getPrice("avalanche-2") || 0;
 
-    const avaxBalance =
-        avaxPrice > 0
-            ? Number((plainUser.balance.testnet / avaxPrice).toFixed(2))
-            : 0;
+//     const avaxBalance =
+//         avaxPrice > 0
+//             ? Number((plainUser.balance.testnet / avaxPrice).toFixed(2))
+//             : 0;
 
-    await adminDb.collection("users").doc(plainUser._id.toString()).set({
-        id: plainUser._id.toString(),
-        email: plainUser.email || "",
-        username: plainUser.username || "",
-        fullName: String(plainUser.fullName || ""),
-        balance: plainUser.balance || { testnet: 0, locked: 0 },
+//     await adminDb.collection("users").doc(plainUser._id.toString()).set({
+//         id: plainUser._id.toString(),
+//         email: plainUser.email || "",
+//         username: plainUser.username || "",
+//         fullName: String(plainUser.fullName || ""),
+//         balance: plainUser.balance || { testnet: 0, locked: 0 },
 
-        // ✅ ADD THIS
-        avaxBalance,
-        usdBalance: plainUser.balance?.testnet || 0,
-        lastBalanceUpdate: Date.now(),
+//         // ✅ ADD THIS
+//         avaxBalance,
+//         usdBalance: plainUser.balance?.testnet || 0,
+//         lastBalanceUpdate: Date.now(),
 
-        authProvider: provider,
-        lastLogin: Date.now()
-    }, { merge: true });
-};
+//         authProvider: provider,
+//         lastLogin: Date.now()
+//     }, { merge: true });
+// };
 
 
 
 // ==========================
 // 🔥 GOOGLE AUTH
 // ==========================
+
+
+const syncUserBalanceMongo = async (user, provider) => {
+    const avaxPrice = getPrice("avalanche-2") || 0;
+
+    const avaxBalance =
+        avaxPrice > 0
+            ? Number((user.balance.testnet / avaxPrice).toFixed(2))
+            : 0;
+
+    user.avaxBalance = avaxBalance;
+    user.usdBalance = user.balance?.testnet || 0;
+    user.lastBalanceUpdate = Date.now();
+    user.authProvider = provider;
+    user.lastLogin = Date.now();
+
+    await user.save();
+};
 
 router.post("/check-token", async (req, res) => {
     try {
@@ -119,7 +137,7 @@ router.post("/google", async (req, res) => {
         }
 
         // 🔥 Always sync to Firestore
-        await syncUserToFirestore(user, "google");
+        await syncUserBalanceMongo(user, "google");
 
         // JWT
         const token = jwt.sign(
@@ -162,7 +180,7 @@ router.post("/signup", async (req, res) => {
             balance: { testnet: 100, locked: 0 }
         });
 
-        await syncUserToFirestore(user, "email");
+        await syncUserBalanceMongo(user, "email");
 
         const token = jwt.sign(
             {
@@ -229,7 +247,7 @@ router.post("/login", async (req, res) => {
 
         // 7️⃣ Sync Firestore
         console.log("🔥 Syncing to Firestore...");
-        await syncUserToFirestore(user, "email");
+        await syncUserBalanceMongo(user, "email");
         console.log("✅ Firestore sync complete");
 
         // 8️⃣ Generate token
@@ -283,7 +301,7 @@ router.get(
                 }
             }
 
-            await syncUserToFirestore(user, "twitter");
+            await syncUserBalanceMongo(user, "twitter");
 
             const token = jwt.sign(
                 { id: user._id },

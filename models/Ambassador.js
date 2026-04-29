@@ -9,7 +9,9 @@ const ambassadorSchema = new mongoose.Schema({
   referralPercent:     {type:Number, default: 5},
 
   totalReferals:       {type:Number, default: 0},
-  totalEarninsgs:      {type:Number, default: 0}
+  totalEarninsgs:      {type:Number, default: 0},
+
+  isEmailSent:         { type: Boolean, default: false }
 
 
 }, { timestamps: true });

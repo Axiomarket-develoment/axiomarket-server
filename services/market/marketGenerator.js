@@ -1,7 +1,7 @@
 const { QUESTION_TEMPLATES } = require("../../confiq/questionTemplate");
 const Market = require("../../models/Market");
 const mongoose = require("mongoose");
-const { adminDb } = require("../../lib/firebaseAdmin"); // ✅ correct
+// const { adminDb } = require("../../lib/firebaseAdmin"); // ✅ correct
 const conversation = require("../../models/conversation");
 const { TOKENS } = require("../../confiq/assets");
 const { getPrice } = require("../price/priceOracle");
@@ -227,73 +227,73 @@ async function createMarket({
     const plainMarket = savedMarket.toObject();
 
     // 5️⃣ FIRESTORE SAFE SUBMARKETS (FULL NORMALIZATION)
-    const firestoreSubMarkets = [];
+    // const firestoreSubMarkets = [];
 
-    plainMarket.subMarkets.forEach(sub => {
-      const outcomes = (sub.outcomes || []).map(o => ({
-        label: o.label || "",
-        result: o.result ?? null,
-        odds: Number(o.odds ?? 2),
-        pool: Number(o.pool ?? 0),
-        liquidity: Number(o.liquidity ?? 0),
-        volume: Number(o.volume ?? 0),
-        count: Number(o.count ?? 0),
-      }));
+    // plainMarket.subMarkets.forEach(sub => {
+    //   const outcomes = (sub.outcomes || []).map(o => ({
+    //     label: o.label || "",
+    //     result: o.result ?? null,
+    //     odds: Number(o.odds ?? 2),
+    //     pool: Number(o.pool ?? 0),
+    //     liquidity: Number(o.liquidity ?? 0),
+    //     volume: Number(o.volume ?? 0),
+    //     count: Number(o.count ?? 0),
+    //   }));
 
-      const totalVolume = outcomes.reduce((a, o) => a + o.volume, 0);
-      const tradeCount = outcomes.reduce((a, o) => a + o.count, 0);
+    //   const totalVolume = outcomes.reduce((a, o) => a + o.volume, 0);
+    //   const tradeCount = outcomes.reduce((a, o) => a + o.count, 0);
 
-      firestoreSubMarkets.push({
-        id: sub._id.toString(),
-        question: sub.question,
-        marketType: sub.marketType,
-        status: sub.status,
+    //   firestoreSubMarkets.push({
+    //     id: sub._id.toString(),
+    //     question: sub.question,
+    //     marketType: sub.marketType,
+    //     status: sub.status,
 
-        outcomes,
-        totalVolume,
-        tradeCount,
-        resolution: sub.resolution || null
-      });
-    });
-    // 6️⃣ FIRESTORE PAYLOAD
-    const firestorePayload = {
-      id: plainMarket._id.toString(),
-      question: plainMarket.question,
-      marketType: plainMarket.marketType,
+    //     outcomes,
+    //     totalVolume,
+    //     tradeCount,
+    //     resolution: sub.resolution || null
+    //   });
+    // });
+    // // 6️⃣ FIRESTORE PAYLOAD
+    // const firestorePayload = {
+    //   id: plainMarket._id.toString(),
+    //   question: plainMarket.question,
+    //   marketType: plainMarket.marketType,
 
-      conversationId: convo._id.toString(),
+    //   conversationId: convo._id.toString(),
 
-      metadata: {
-        asset: plainMarket.metadata.asset,
-        startPrice: plainMarket.metadata.startPrice,
-        targetPrice: plainMarket.metadata.targetPrice,
-        assetSymbol: plainMarket.metadata.assetSymbol,
-        direction: plainMarket.metadata.direction
-      },
+    //   metadata: {
+    //     asset: plainMarket.metadata.asset,
+    //     startPrice: plainMarket.metadata.startPrice,
+    //     targetPrice: plainMarket.metadata.targetPrice,
+    //     assetSymbol: plainMarket.metadata.assetSymbol,
+    //     direction: plainMarket.metadata.direction
+    //   },
 
-      currentPrice: plainMarket.metadata.startPrice,
-      targetPrice: plainMarket.metadata.targetPrice,
-      direction: plainMarket.metadata.direction,
+    //   currentPrice: plainMarket.metadata.startPrice,
+    //   targetPrice: plainMarket.metadata.targetPrice,
+    //   direction: plainMarket.metadata.direction,
 
-      totalVolume: plainMarket.totalVolume || 0,
-      tradeCount: plainMarket.tradeCount || 0,
-      status: plainMarket.status,
+    //   totalVolume: plainMarket.totalVolume || 0,
+    //   tradeCount: plainMarket.tradeCount || 0,
+    //   status: plainMarket.status,
 
-      startDate: plainMarket.startDate.getTime(),
-      endDate: plainMarket.endDate.getTime(),
-      durationMinutes: plainMarket.durationMinutes,
+    //   startDate: plainMarket.startDate.getTime(),
+    //   endDate: plainMarket.endDate.getTime(),
+    //   durationMinutes: plainMarket.durationMinutes,
 
 
-      subMarkets: firestoreSubMarkets,
+    //   subMarkets: firestoreSubMarkets,
 
-      createdAt: Date.now()
-    };
+    //   createdAt: Date.now()
+    // };
 
-    // 7️⃣ SAVE TO FIRESTORE
-    await adminDb
-      .collection("markets")
-      .doc(plainMarket._id.toString())
-      .set(firestorePayload);
+    // // 7️⃣ SAVE TO FIRESTORE
+    // await adminDb
+    //   .collection("markets")
+    //   .doc(plainMarket._id.toString())
+    //   .set(firestorePayload);
 
     return savedMarket;
 
