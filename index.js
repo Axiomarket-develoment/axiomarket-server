@@ -147,11 +147,11 @@ mongoose.connect(MONGO_URI)
   .then(async () => {
     console.log("🟢 MongoDB connected successfully");
 
-    // ✅ WAIT for oracle to fill cache FIRST
-    await startOracle();
+    // // ✅ WAIT for oracle to fill cache FIRST
+    // await startOracle();
 
-    // ✅ THEN start cron
-    startMarketCron();
+    // // ✅ THEN start cron
+    // startMarketCron();
 
     setInterval(syncWalletBalances, 30000);
   })
