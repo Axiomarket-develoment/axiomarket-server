@@ -17,6 +17,7 @@ const Market = require("./models/Market");
 const { startMarketCron } = require("./crons/marketCron");
 const { startOracle } = require("./services/price/priceOracle");
 const { syncWalletBalances } = require("./services/wallet/syncWalletBalance");
+const { airdropUsers } = require("./functions/airdrop");
 
 // // ---------------- DNS Config ----------------
 dnsPromises.setServers(["1.1.1.1", "8.8.8.8"]);
@@ -148,12 +149,14 @@ mongoose.connect(MONGO_URI)
     console.log("🟢 MongoDB connected successfully");
 
     // // ✅ WAIT for oracle to fill cache FIRST
-    // await startOracle();
+    await startOracle();
 
-    // // ✅ THEN start cron
-    // startMarketCron();
+    // ✅ THEN start cron
+    startMarketCron();
 
     setInterval(syncWalletBalances, 30000);
+
+    // await airdropUsers();
   })
   .catch((err) => {
     console.error("❌ FULL Mongo Error:", err);

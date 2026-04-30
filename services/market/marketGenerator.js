@@ -5,7 +5,8 @@ const mongoose = require("mongoose");
 const conversation = require("../../models/conversation");
 const { TOKENS } = require("../../confiq/assets");
 const { getPrice } = require("../price/priceOracle");
-
+const { get12hCycleTimes } = require("../marketTiming/12hCycle");
+const { get24hCycleTimes } = require("../marketTiming/24hCycle");
 
 // console.log("SUPPORTED_ASSETS:", SUPPORTED_ASSETS);
 
@@ -80,66 +81,6 @@ function formatDuration(minutes) {
 }
 
 
-// function getMarketEndDate(durationMinutes) {
-//   const now = new Date();
-
-//   const today9AM = new Date(now);
-//   today9AM.setHours(9, 0, 0, 0);
-
-//   const today9PM = new Date(now);
-//   today9PM.setHours(21, 0, 0, 0);
-
-//   const tomorrow9AM = new Date(today9AM);
-//   tomorrow9AM.setDate(tomorrow9AM.getDate() + 1);
-
-//   if (durationMinutes === 720) {
-//     return today9PM; // 12h market always ends 9PM
-//   }
-
-//   if (durationMinutes === 1440) {
-//     return tomorrow9AM; // 24h market ends 9AM next day
-//   }
-// }
-
-const getMarketEndDate = (durationMinutes) => {
-  const now = new Date();
-
-  const today10AM = new Date(now);
-  today10AM.setHours(10, 0, 0, 0);
-
-  const today10PM = new Date(now);
-  today10PM.setHours(22, 0, 0, 0);
-
-  const tomorrow10AM = new Date(today10AM);
-  tomorrow10AM.setDate(tomorrow10AM.getDate() + 1);
-
-  switch (durationMinutes) {
-    case 720:
-      return today10PM;
-    case 1440:
-      return tomorrow10AM;
-    default:
-      return new Date(now.getTime() + durationMinutes * 60 * 1000);
-  }
-};
-
-function getMarketStartDate() {
-  const now = new Date();
-
-  const today10AM = new Date(now);
-  today10AM.setHours(10, 0, 0, 0);
-
-  // if cron runs before 10 → use today 10
-  if (now < today10AM) {
-    return today10AM;
-  }
-
-  // if after 10 → use next day's 10
-  const tomorrow10AM = new Date(today10AM);
-  tomorrow10AM.setDate(tomorrow10AM.getDate() + 1);
-
-  return tomorrow10AM;
-}
 
 async function createMarket({
   asset,
@@ -307,15 +248,25 @@ async function generateMarkets() {
   try {
     const directions = ["UP"];
     const jobs = [];
-    const startDate = getMarketStartDate();
 
-    // 🧠 FIXED DAILY ANCHOR
+    const cycles = [
+      {
+        durationMinutes: 720,
+        time: get12hCycleTimes()
+      },
+      {
+        durationMinutes: 1440,
+        time: get24hCycleTimes()
+      }
+    ];
 
-    for (const durationMinutes of [720, 1440]) {
+    for (const cycle of cycles) {
+      const durationMinutes = cycle.durationMinutes;
+      const { startDate, endDate } = cycle.time;
 
-      const endDate = getMarketEndDate(durationMinutes);
+
       for (const asset of shuffledTokens) {
-        const currentPrice = getPrice(asset);
+        const currentPrice = await getPrice(asset);
         if (!currentPrice) continue;
 
         const direction = "UP";

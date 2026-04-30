@@ -234,10 +234,10 @@ router.post("/user_enter_market", async (req, res) => {
             });
         }
 
-        selectedOutcome.pool += usdAmount;
+        selectedOutcome.pool += netUsd;
         selectedOutcome.count += 1;
-        selectedOutcome.volume += usdAmount;
-        selectedOutcome.liquidity += usdAmount;
+        selectedOutcome.volume += netUsd;
+        selectedOutcome.liquidity += netUsd;
 
         const totalPool = subMarket.outcomes.reduce((a, o) => a + o.pool, 0);
         const MIN_PERCENT = 20;
@@ -271,10 +271,10 @@ router.post("/user_enter_market", async (req, res) => {
         });
 
         subMarket.tradeCount += 1;
-        subMarket.totalVolume += usdAmount;
+        subMarket.totalVolume += netUsd;
 
         market.tradeCount += 1;
-        market.totalVolume += usdAmount;
+        market.totalVolume += netUsd;
 
         const position = await Position.create({
             userId,

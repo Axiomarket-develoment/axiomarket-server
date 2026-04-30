@@ -1,115 +1,118 @@
 const cron = require("node-cron");
 const Market = require("../models/Market");
 const { generateMarkets } = require("../services/market/marketGenerator");
-const Conversation = require("../models/conversation");
-const Message = require("../models/Message");
 const { fetchOutcomeFromOracle } = require("../utils/oracle");
 const { settleMarket } = require("../services/market/settlement");
-// const { adminDb } = require("../lib/firebaseAdmin");
-const Fill = require("../models/Fill");
 
 function startMarketCron() {
 
-  let generatingMarkets = false;
+  let generating = false;
 
-  // 🟢 5 MINUTE MARKETS
-
-  // 🔵 15 MINUTE MARKETS
-  // 🕘 DAILY MARKET GENERATION (9 AM)
+  // ===============================
+  // 🟢 MARKET GENERATION (5 MIN)
+  // ===============================
   cron.schedule("*/5 * * * *", async () => {
     try {
-      console.log("🛟 Checking market health...");
-
       const liveCount = await Market.countDocuments({ status: "LIVE" });
 
-      console.log(`📊 Live markets: ${liveCount}`);
-
-      if (liveCount < 5 && !generatingMarkets) {
-        generatingMarkets = true;
-
-        console.log("⚠️ Low market count — triggering regeneration...");
+      if (liveCount < 20 && !generating) {
+        generating = true;
 
         try {
           await generateMarkets();
         } catch (err) {
-          console.error("❌ generateMarkets failed:", err.message);
+          console.error("generateMarkets failed:", err.message);
         } finally {
-          generatingMarkets = false; // 🔥 always reset
+          generating = false;
         }
       }
 
     } catch (err) {
-      console.error("❌ Market health check failed:", err.message);
+      console.error("Market generation error:", err.message);
     }
   });
 
+  // ===============================
+  // 🔴 END MARKETS (EVERY 1 MIN)
+  // ===============================
+  cron.schedule("* * * * *", async () => {
+    try {
+      const now = new Date();
 
-  // 🔴 END MARKETS (runs every minute)
-  cron.schedule("0 */2 * * *", async () => {
-    const now = new Date();
+      const markets = await Market.find({
+        status: "LIVE",
+        endDate: { $lte: now }
+      }).limit(20);
 
-    const markets = await Market.find({
-      status: "LIVE",
-      endDate: { $lte: now }
-    }).limit(10);
-
-    for (const market of markets) {
-      market.status = "ENDED";
-      await market.save();
-
-      console.log(`✅ Ended: ${market.question}`);
-    }
-  });
-
-  // 🟣 SETTLEMENT EVERY 12 HOURS
-  // 🟣 SETTLEMENT EVERY 2 HOURS
-  cron.schedule("0 */2 * * *", async () => {
-    console.log("🏁 Running 2-hour settlement...");
-
-    const markets = await Market.find({
-      status: "ENDED",
-      result: null,
-      processing: { $ne: true }
-    });
-
-    for (const market of markets) {
-      try {
-        // 🔒 lock
-        market.processing = true;
-        await market.save();
-
-        const outcome = await fetchOutcomeFromOracle(market);
-
-        if (!outcome) {
-          market.processing = false;
-          await market.save();
-          console.log("⚠️ No outcome, skipping");
-          continue;
-        }
-
-        await settleMarket(market, outcome);
-
-        // 🔓 unlock
-        market.processing = false;
-        await market.save();
-
-        console.log(`✅ Settled: ${market._id}`);
-      } catch (err) {
-        market.processing = false;
-        await market.save();
-        console.error("❌ Settlement failed:", err.message);
+      for (const market of markets) {
+        await Market.updateOne(
+          { _id: market._id },
+          { $set: { status: "ENDED" } }
+        );
       }
+
+    } catch (err) {
+      console.error("Market end error:", err.message);
     }
   });
 
+  // ===============================
+  // 🏁 SETTLEMENT (EVERY 5 MIN)
+  // ===============================
+  cron.schedule("*/5 * * * *", async () => {
+    try {
+      const markets = await Market.find({
+        status: "ENDED",
+        processing: { $ne: true }
+      }).limit(20);
 
+      for (const m of markets) {
 
-  // every 15 minutes
-  // cron.schedule("*/15 * * * *", async () => {
-  //   console.log("💰 Running wallet sync...");
-  //   await syncWalletBalances();
-  // });
+        const market = await Market.findOneAndUpdate(
+          { _id: m._id, processing: { $ne: true } },
+          { $set: { processing: true } },
+          { new: true }
+        );
+
+        if (!market) continue;
+
+        try {
+          const outcome = await fetchOutcomeFromOracle(market);
+
+          if (!outcome) {
+            await Market.updateOne(
+              { _id: market._id },
+              { $set: { processing: false } }
+            );
+            continue;
+          }
+
+          await settleMarket(market, outcome);
+
+          await Market.updateOne(
+            { _id: market._id },
+            {
+              $set: {
+                status: "SETTLED",
+                processing: false,
+                result: outcome
+              }
+            }
+          );
+
+        } catch (err) {
+          await Market.updateOne(
+            { _id: market._id },
+            { $set: { processing: false } }
+          );
+        }
+      }
+
+    } catch (err) {
+      console.error("Settlement error:", err.message);
+    }
+  });
+
 }
-
 
 module.exports = { startMarketCron };

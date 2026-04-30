@@ -6,66 +6,79 @@ const fetch = require("node-fetch");
 
 const User = require("../models/User");
 // const { adminDb } = require("../lib/firebaseAdmin");
-
 const jwt = require("jsonwebtoken");
-
 const JWT_SECRET = process.env.JWT_SECRET;
-
-// ==========================
-// 🔥 FIRESTORE SYNC HELPER
-// ==========================
 const { getPrice } = require("../services/price/priceOracle");
-
-// const syncUserToFirestore = async (user, provider) => {
-//     const plainUser = user.toObject ? user.toObject() : user;
-
-//     const avaxPrice = getPrice("avalanche-2") || 0;
-
-//     const avaxBalance =
-//         avaxPrice > 0
-//             ? Number((plainUser.balance.testnet / avaxPrice).toFixed(2))
-//             : 0;
-
-//     await adminDb.collection("users").doc(plainUser._id.toString()).set({
-//         id: plainUser._id.toString(),
-//         email: plainUser.email || "",
-//         username: plainUser.username || "",
-//         fullName: String(plainUser.fullName || ""),
-//         balance: plainUser.balance || { testnet: 0, locked: 0 },
-
-//         // ✅ ADD THIS
-//         avaxBalance,
-//         usdBalance: plainUser.balance?.testnet || 0,
-//         lastBalanceUpdate: Date.now(),
-
-//         authProvider: provider,
-//         lastLogin: Date.now()
-//     }, { merge: true });
-// };
+const calcUserBalance = require("../services/balance/calcUserBalance");
 
 
 
-// ==========================
-// 🔥 GOOGLE AUTH
-// ==========================
+async function syncUserBalance(user, options = {}) {
+    if (!user?._id) return;
 
+    const updated = await calcUserBalance(user, options);
 
-const syncUserBalanceMongo = async (user, provider) => {
-    const avaxPrice = getPrice("avalanche-2") || 0;
+    await User.updateOne(
+        { _id: user._id },
+        { $set: updated }
+    );
 
-    const avaxBalance =
-        avaxPrice > 0
-            ? Number((user.balance.testnet / avaxPrice).toFixed(2))
-            : 0;
+    return updated;
+}
 
-    user.avaxBalance = avaxBalance;
-    user.usdBalance = user.balance?.testnet || 0;
-    user.lastBalanceUpdate = Date.now();
-    user.authProvider = provider;
-    user.lastLogin = Date.now();
+router.post("/google", async (req, res) => {
+    try {
+        const { token: accessToken } = req.body;
 
-    await user.save();
-};
+        const userInfoRes = await fetch(
+            "https://www.googleapis.com/oauth2/v3/userinfo",
+            { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+
+        const payload = await userInfoRes.json();
+        const { email, name } = payload;
+
+        if (!email) {
+            return res.status(400).json({ error: "No email from Google" });
+        }
+
+        const username = name?.replace(/\s+/g, "").toLowerCase() || email.split("@")[0];
+
+        let user = await User.findOne({ email });
+
+        // ✅ If NOT exist → create
+        if (!user) {
+            user = await User.create({
+                email,
+                fullName: name,
+                username,
+                authProvider: "google",
+                balance: { testnet: 100, locked: 0 },
+                wallet: { address: "", privateKey: "" },
+            });
+        }
+
+        // 🔥 Always sync to Firestore
+        await syncUserBalance(user, "");
+
+        // JWT
+        const token = jwt.sign(
+            {
+                id: user._id.toString(),
+                email: user.email
+            },
+            JWT_SECRET,
+            { expiresIn: "30d" }
+        );
+
+        res.json({ success: true, token, user });
+
+    } catch (err) {
+        console.error("Google auth error:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
 
 router.post("/check-token", async (req, res) => {
     try {
@@ -104,59 +117,6 @@ router.post("/check-token", async (req, res) => {
     }
 });
 
-router.post("/google", async (req, res) => {
-    try {
-        const { token: accessToken } = req.body;
-
-        const userInfoRes = await fetch(
-            "https://www.googleapis.com/oauth2/v3/userinfo",
-            { headers: { Authorization: `Bearer ${accessToken}` } }
-        );
-
-        const payload = await userInfoRes.json();
-        const { email, name } = payload;
-
-        if (!email) {
-            return res.status(400).json({ error: "No email from Google" });
-        }
-
-        const username = name?.replace(/\s+/g, "").toLowerCase() || email.split("@")[0];
-
-        let user = await User.findOne({ email });
-
-        // ✅ If NOT exist → create
-        if (!user) {
-            user = await User.create({
-                email,
-                fullName: name,
-                username,
-                authProvider: "google",
-                balance: { testnet: 100, locked: 0 },
-                wallet: { address: "", privateKey: "" },
-            });
-        }
-
-        // 🔥 Always sync to Firestore
-        await syncUserBalanceMongo(user, "google");
-
-        // JWT
-        const token = jwt.sign(
-            {
-                id: user._id.toString(),
-                email: user.email
-            },
-            JWT_SECRET,
-            { expiresIn: "30d" }
-        );
-
-        res.json({ success: true, token, user });
-
-    } catch (err) {
-        console.error("Google auth error:", err);
-        res.status(500).json({ error: "Internal server error" });
-    }
-});
-
 // ==========================
 // 🔥 EMAIL SIGNUP
 // ==========================
@@ -180,7 +140,7 @@ router.post("/signup", async (req, res) => {
             balance: { testnet: 100, locked: 0 }
         });
 
-        await syncUserBalanceMongo(user, "email");
+        await syncUserBalance(user, { provider: "email" });
 
         const token = jwt.sign(
             {
@@ -247,7 +207,7 @@ router.post("/login", async (req, res) => {
 
         // 7️⃣ Sync Firestore
         console.log("🔥 Syncing to Firestore...");
-        await syncUserBalanceMongo(user, "email");
+        await syncUserBalance(user, { provider: "email" });
         console.log("✅ Firestore sync complete");
 
         // 8️⃣ Generate token
@@ -301,7 +261,7 @@ router.get(
                 }
             }
 
-            await syncUserBalanceMongo(user, "twitter");
+            await syncUserBalance(user, { provider: "twitter" });
 
             const token = jwt.sign(
                 { id: user._id },

@@ -1,4 +1,5 @@
 const { adminDb } = require("../lib/firebaseAdmin");
+const User = require("../models/User");
 
 const roundTo2 = (num) => Math.floor(num * 100) / 100;
 
