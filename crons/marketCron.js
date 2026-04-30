@@ -15,7 +15,7 @@ function startMarketCron() {
     try {
       const liveCount = await Market.countDocuments({ status: "LIVE" });
 
-      if (liveCount < 20 && !generating) {
+      if (liveCount < 5 && !generating) {
         generating = true;
 
         try {
