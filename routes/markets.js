@@ -14,6 +14,7 @@ const syncUserBalance = require("../functions/syncUserBalance");
 const Ambassador = require("../models/Ambassador");
 const Stats = require("../models/Stats");
 const { getPrice } = require("../services/price/priceOracle");
+const Conversation = require("../models/conversation");
 
 
 
@@ -418,7 +419,7 @@ router.post("/create-sport-market", async (req, res) => {
         // ✅ 3. LINK BACK TO MARKET
         market.conversationId = conversation._id;
         await market.save();
-        
+
         res.json({ success: true, market });
 
     } catch (err) {
