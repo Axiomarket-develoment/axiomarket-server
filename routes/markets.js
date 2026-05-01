@@ -55,62 +55,17 @@ router.post("/create", async (req, res) => {
     }
 });
 
-
-
-// Get all markets
+// Get all active markets (exclude settled)
 router.get("/markets", async (req, res) => {
-    const markets = await Market.find().sort({ createdAt: -1 });
-    res.json(markets);
-});
-
-// Existing routes...
-
-/**
- * GET /market/chart/:token
- * Fetches 1-day minute interval price chart for a token from CoinGecko
- * Example: /market/chart/polkadot
- */
-router.get("/chart/:token", async (req, res) => {
-    const { token } = req.params;
-    const { interval = "5m" } = req.query;
-
-    console.log("🚀 CHART REQUEST:", { token, interval });
-
-    const symbolMap = {
-        bitcoin: "BTC",
-        ethereum: "ETH",
-        solana: "SOL",
-        binancecoin: "BNB",
-        dogecoin: "DOGE",
-    };
-
-    const symbol = symbolMap[token?.toLowerCase()];
-
-    if (!symbol) {
-        console.log("❌ INVALID TOKEN:", token);
-        return res.status(400).json({ error: "Unsupported token" });
-    }
-
     try {
-        const { candles, source } = await getCandles(symbol, interval);
+        const markets = await Market.find({
+            status: { $ne: "SETTLED" },
+        }).sort({ createdAt: -1 });
 
-        console.log("📦 RESPONSE SUMMARY:");
-        console.log("source:", source);
-        console.log("candles:", candles.length);
-
-        return res.json({
-            source,
-            interval,
-            candles
-        });
-
+        res.json(markets);
     } catch (err) {
-        console.log("❌ ROUTE ERROR:", err.message);
-
-        return res.json({
-            source: "error",
-            candles: []
-        });
+        console.error(err);
+        res.status(500).json({ message: "Failed to fetch markets" });
     }
 });
 
@@ -401,5 +356,75 @@ router.post("/saved_market", async (req, res) => {
 });
 
 
+
+// 🧠 Endpoint
+router.post("/create-sport-market", async (req, res) => {
+    try {
+        const { clubA, clubB, league, startTime, endTime } = req.body;
+
+        // ✅ clubA and clubB are OBJECTS now
+        // { name: "Manchester United", logo: "https://..." }
+
+        if (!clubA?.name || !clubB?.name) {
+            return res.status(400).json({
+                error: "Invalid club data"
+            });
+        }
+
+        const market = await Market.create({
+            question: `${clubA.name} vs ${clubB.name} - Who will win?`,
+            marketType: "SPORT",
+
+            event: {
+                name: `${clubA.name} vs ${clubB.name}`,
+                participants: [clubA.name, clubB.name],
+                participantImages: [clubA.logo, clubB.logo],
+                league,
+                startTime: new Date(startTime)
+            },
+
+            subMarkets: [
+                {
+                    question: "Match Result",
+                    marketType: "SPORT",
+                    outcomes: [
+                        { label: "HOME", name: clubA.name, odds: 2.5, pool: 0, percentage: 40 },
+                        { label: "DRAW", name: "Draw", odds: 3.2, pool: 0, percentage: 20 },
+                        { label: "AWAY", name: clubB.name, odds: 2.8, pool: 0, percentage: 40 }
+                    ],
+                    status: "LIVE"
+                }
+            ],
+
+            startDate: new Date(startTime),
+            endDate: new Date(endTime),
+            durationMinutes: Math.floor(
+                (new Date(endTime) - new Date(startTime)) / 60000
+            ),
+
+            category: "Sports",
+            status: "LIVE"
+        });
+
+
+        // ✅ 2. CREATE CONVERSATION (NO messages, YOUR STRUCTURE)
+        const conversation = await Conversation.create({
+            market: market._id,
+            participants: [], // leave empty or add creator later
+            conv_type: "group",
+            latest_msg: null
+        });
+
+        // ✅ 3. LINK BACK TO MARKET
+        market.conversationId = conversation._id;
+        await market.save();
+        
+        res.json({ success: true, market });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
 
 module.exports = router;

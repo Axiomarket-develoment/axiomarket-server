@@ -5,73 +5,61 @@ const { fetchOutcomeFromOracle } = require("../utils/oracle");
 const { settleMarket } = require("../services/market/settlement");
 
 function startMarketCron() {
+  let running = false;
 
-  let generating = false;
-
-  // ===============================
-  // 🟢 MARKET GENERATION (5 MIN)
-  // ===============================
-  cron.schedule("*/5 * * * *", async () => {
-    try {
-      const liveCount = await Market.countDocuments({ status: "LIVE" });
-
-      if (liveCount < 5 && !generating) {
-        generating = true;
-
-        try {
-          await generateMarkets();
-        } catch (err) {
-          console.error("generateMarkets failed:", err.message);
-        } finally {
-          generating = false;
-        }
-      }
-
-    } catch (err) {
-      console.error("Market generation error:", err.message);
-    }
-  });
-
-  // ===============================
-  // 🔴 END MARKETS (EVERY 1 MIN)
-  // ===============================
   cron.schedule("* * * * *", async () => {
+    if (running) {
+      console.log("⏭ Skipping tick (still running)");
+      return;
+    }
+
+    running = true;
+
     try {
       const now = new Date();
 
-      const markets = await Market.find({
-        status: "LIVE",
-        endDate: { $lte: now }
-      }).limit(20);
+      console.log("\n⏱ CRON TICK:", now.toISOString());
 
-      for (const market of markets) {
-        await Market.updateOne(
-          { _id: market._id },
-          { $set: { status: "ENDED" } }
-        );
+      // =========================
+      // 1. END MARKETS
+      // =========================
+      const endedMarkets = await Market.updateMany(
+        {
+          status: "LIVE",
+          endDate: { $lte: now }
+        },
+        {
+          $set: { status: "ENDED" }
+        }
+      );
+
+      if (endedMarkets.modifiedCount > 0) {
+        console.log(`🛑 Ended ${endedMarkets.modifiedCount} markets`);
       }
 
-    } catch (err) {
-      console.error("Market end error:", err.message);
-    }
-  });
-
-  // ===============================
-  // 🏁 SETTLEMENT (EVERY 5 MIN)
-  // ===============================
-  cron.schedule("*/5 * * * *", async () => {
-    try {
-      const markets = await Market.find({
+      // =========================
+      // 2. SETTLE MARKETS
+      // =========================
+      const marketsToSettle = await Market.find({
         status: "ENDED",
-        processing: { $ne: true }
-      }).limit(20);
+        processing: false
+      }).limit(10);
 
-      for (const m of markets) {
+      for (const m of marketsToSettle) {
 
+        // 🔒 atomic lock
         const market = await Market.findOneAndUpdate(
-          { _id: m._id, processing: { $ne: true } },
-          { $set: { processing: true } },
-          { new: true }
+          {
+            _id: m._id,
+            status: "ENDED",
+            processing: false
+          },
+          {
+            $set: { processing: true, status: "SETTLING" }
+          },
+          {
+            returnDocument: "after"
+          }
         );
 
         if (!market) continue;
@@ -82,7 +70,7 @@ function startMarketCron() {
           if (!outcome) {
             await Market.updateOne(
               { _id: market._id },
-              { $set: { processing: false } }
+              { $set: { processing: false, status: "ENDED" } }
             );
             continue;
           }
@@ -100,19 +88,34 @@ function startMarketCron() {
             }
           );
 
+          console.log(`✅ Settled: ${market._id}`);
+
         } catch (err) {
+          console.log("❌ Settlement error:", err.message);
+
           await Market.updateOne(
             { _id: market._id },
-            { $set: { processing: false } }
+            { $set: { processing: false, status: "ENDED" } }
           );
         }
       }
 
-    } catch (err) {
-      console.error("Settlement error:", err.message);
-    }
-  });
+      // =========================
+      // 3. GENERATE MARKETS
+      // =========================
+      const liveCount = await Market.countDocuments({ status: "LIVE" });
 
+      if (liveCount < 5) {
+        console.log("⚡ Generating new markets...");
+        await generateMarkets();
+      }
+
+    } catch (err) {
+      console.error("❌ CRON ERROR:", err.message);
+    }
+
+    running = false;
+  });
 }
 
 module.exports = { startMarketCron };

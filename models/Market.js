@@ -39,7 +39,7 @@ const MarketSchema = new mongoose.Schema({
   subMarkets:            [SubMarketSchema],
   // sport data
   event:                 { name: String, participants: [String],  participantImages: [String],  league: String ,startTime: Date }, 
-
+  matchStartTime:        { type: Date }, 
   startDate:             { type: Date, required: true },
   endDate:               { type: Date, required: true },
   durationMinutes:       { type: Number, required: true },
@@ -65,7 +65,7 @@ const MarketSchema = new mongoose.Schema({
   createdAt:             { type: Date, default: Date.now },
 
   processing:            {type: Boolean, default: false},
-  status:                { type: String, enum: ["PENDING", "LIVE", "ENDED", "SETTLED"], default: "LIVE" },
+  status:                { type: String, enum: ["PENDING", "LIVE","LOCKED", "ENDED","SETTLING", "SETTLED"], default: "LIVE" },
 });
 
 

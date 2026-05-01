@@ -15,10 +15,24 @@ const HttpServer = (httpServer) => {
     console.log("A user connected:", socket.id);
     // socket for help and feedback
 
+    socket.on("auth", (userId) => {
+      if (!userId) return;
+
+      const id = userId.toString();
+
+      socket.join(id);
+      socket.userId = id;
+
+      console.log("User joined personal room:", id);
+    });
+
     socket.on("join-room", (conversation_id) => {
       socket.join(conversation_id);
       console.log("User joined room:", conversation_id);
     });
+
+
+    
 
 
     socket.on("group-message", (data, callback) => {
@@ -43,4 +57,7 @@ const HttpServer = (httpServer) => {
   });
 };
 
-module.exports = { HttpServer };
+const getIO = () => io;
+
+
+module.exports = { HttpServer, getIO };

@@ -61,6 +61,7 @@ router.post("/google", async (req, res) => {
         // 🔥 Always sync to Firestore
         await syncUserBalance(user, "");
 
+        const freshUser = await User.findById(user._id);
         // JWT
         const token = jwt.sign(
             {
@@ -71,7 +72,7 @@ router.post("/google", async (req, res) => {
             { expiresIn: "30d" }
         );
 
-        res.json({ success: true, token, user });
+        res.json({ success: true, token, user: freshUser });
 
     } catch (err) {
         console.error("Google auth error:", err);

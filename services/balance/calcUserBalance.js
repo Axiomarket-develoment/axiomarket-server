@@ -11,17 +11,14 @@ async function calcUserBalance(user, options = {}) {
 
     let avaxBalance = user.avaxBalance || 0;
 
-    // if price exists → recalc
     if (price && price > 0) {
         avaxBalance = round2(user.balance.testnet / price);
     }
 
     return {
-        avaxBalance: round2(avaxBalance),
+        avaxBalance,
         usdBalance: round2(user.balance?.testnet || 0),
-        lastBalanceUpdate: Date.now(),
-        authProvider: options.provider || user.authProvider,
-        lastLogin: Date.now()
+        lastBalanceUpdate: Date.now()
     };
 }
 

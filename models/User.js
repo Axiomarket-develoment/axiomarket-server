@@ -17,7 +17,7 @@ const UserSchema = new mongoose.Schema({
                         },
                 
   savedMarkets:         { 
-                          type:    [{type: mongoose.Schema.Types.ObjectId, ref: "Market" }],
+                          type: [String],
                           default: []
                         },
 
