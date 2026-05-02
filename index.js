@@ -100,28 +100,34 @@ async function deleteAllLiveMarketsOnBoot() {
   }
 }
 
-async function deleteAllLiveMarketsOnBoot() {
+async function deleteAllLiveCryptoMarketsOnBoot() {
   const Market = require("./models/Market");
   const { adminDb } = require("./lib/firebaseAdmin");
 
   try {
-    console.log("🧨 Boot cleanup: deleting LIVE markets...");
+    console.log("🧨 Boot cleanup: deleting LIVE CRYPTO markets...");
 
-    const liveMarkets = await Market.find({ status: "LIVE" }).select("_id");
+    const liveMarkets = await Market.find({
+      status: "LIVE",
+      marketType: "CRYPTO"
+    }).select("_id");
 
-    console.log(`Found ${liveMarkets.length} LIVE markets`);
+    console.log(`Found ${liveMarkets.length} LIVE CRYPTO markets`);
 
     if (liveMarkets.length === 0) {
-      console.log("✅ No LIVE markets to delete");
+      console.log("✅ No LIVE CRYPTO markets to delete");
       return;
     }
 
     const ids = liveMarkets.map(m => m._id.toString());
 
-    // ✅ Bulk delete Mongo (FAST)
-    await Market.deleteMany({ _id: { $in: ids } });
+    // ✅ MongoDB bulk delete
+    await Market.deleteMany({
+      _id: { $in: ids },
+      marketType: "CRYPTO"
+    });
 
-    // ✅ Firestore deletes (parallel)
+    // ✅ Firestore cleanup
     const deletePromises = ids.map(id =>
       adminDb.collection("markets").doc(id).delete().catch(e => {
         console.log(`⚠️ Firestore skip ${id}:`, e.message);
@@ -130,7 +136,7 @@ async function deleteAllLiveMarketsOnBoot() {
 
     await Promise.all(deletePromises);
 
-    console.log(`🗑 Deleted ${ids.length} LIVE markets`);
+    console.log(`🗑 Deleted ${ids.length} LIVE CRYPTO markets`);
     console.log("✅ Boot cleanup complete");
 
   } catch (err) {
@@ -154,6 +160,8 @@ mongoose.connect(MONGO_URI)
     ]).then(() => {
       startMarketCron();
     });
+
+    await deleteAllLiveCryptoMarketsOnBoot();
 
     setInterval(syncWalletBalances, 30000);
 

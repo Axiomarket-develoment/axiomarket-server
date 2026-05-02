@@ -40,8 +40,8 @@ const MarketSchema = new mongoose.Schema({
   // sport data
   event:                 { name: String, participants: [String],  participantImages: [String],  league: String ,startTime: Date }, 
   matchStartTime:        { type: Date }, 
-  startDate:             { type: Date, required: true },
-  endDate:               { type: Date, required: true },
+  startDate:             { type: Date, required: true , set: (v) => new Date(v)},
+  endDate:               { type: Date, required: true , set: (v) => new Date(v)},
   durationMinutes:       { type: Number, required: true },
 
   // Crypto Data

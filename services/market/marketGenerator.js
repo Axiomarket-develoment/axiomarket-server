@@ -177,80 +177,68 @@ async function createMarket({
   }
 }
 
-async function generateMarkets() {
+async function generateMarkets({ durationMinutes }) {
   try {
-    const directions = ["UP"];
     const jobs = [];
 
-    const cycles = [
-      {
-        durationMinutes: 60,
-        time: get1hCycleTimes()
-      },
-      {
-        durationMinutes: 720,
-        time: get12hCycleTimes()
-      },
-      {
-        durationMinutes: 1440,
-        time: get24hCycleTimes()
-      }
-    ];
+    const cycleTimes =
+      durationMinutes === 5
+        ? get5mCycleTimes()
+        : durationMinutes === 60
+          ? get1hCycleTimes()
+          : durationMinutes === 720
+            ? get12hCycleTimes()
+            : get24hCycleTimes();
 
-    for (const cycle of cycles) {
-      const durationMinutes = cycle.durationMinutes;
-      const { startDate, endDate } = cycle.time;
+    const { startDate, endDate } = cycleTimes;
 
+    for (const asset of shuffledTokens) {
+      const currentPrice = await getPrice(asset);
+      if (!currentPrice) continue;
 
-      for (const asset of shuffledTokens) {
-        const currentPrice = await getPrice(asset);
-        if (!currentPrice) continue;
-
-        const direction = "UP";
-        let percentMove;
-
-        if (TEST_MODE) {
-          percentMove = Math.random() * 0.3 + 0.2; // 0.2% → 0.5%
-        } else {
-          if (durationMinutes === 5) {
-            percentMove = Math.random() * 0.15 + 0.05; // 0.05% → 0.2%
-          }
-          else if (durationMinutes === 60) {
-            percentMove = Math.random() * 0.4 + 0.2; // 0.2% → 0.6%
-          }
-          else if (durationMinutes === 720) {
-            percentMove = Math.random() * 1.2 + 0.5; // 0.5% → 1.7%
-          }
-          else {
-            percentMove = Math.random() * 2 + 1; // 1% → 3%
-          }
+      let percentMove;
+      if (TEST_MODE) {
+        percentMove = Math.random() * 0.15 + 0.1; // 0.10% → 0.25%
+      } else {
+        if (durationMinutes === 5) {
+          percentMove = Math.random() * 0.08 + 0.02; // 0.02% → 0.10%
         }
-
-        let targetPrice = currentPrice * (1 + percentMove / 100);
-
-        targetPrice =
-          currentPrice < 1
-            ? Number(targetPrice.toFixed(8))
-            : Number(targetPrice.toFixed(2));
-
-        const question = `Will ${getSymbol(asset)} be above $${targetPrice} in ${formatDuration(durationMinutes)}?`;
-        jobs.push(
-          createMarket({
-            asset,
-            question,
-            currentPrice,
-            targetPrice,
-            direction,
-            durationMinutes,
-            endDate,
-            startDate
-          })
-        );
-
+        else if (durationMinutes === 60) {
+          percentMove = Math.random() * 0.2 + 0.1; // 0.1% → 0.3%
+        }
+        else if (durationMinutes === 720) {
+          percentMove = Math.random() * 0.6 + 0.2; // 0.2% → 0.8%
+        }
+        else {
+          percentMove = Math.random() * 1.0 + 0.4; // 0.4% → 1.4%
+        }
       }
+
+      const targetPriceRaw =
+        currentPrice * (1 + percentMove / 100);
+
+      const targetPrice =
+        currentPrice < 1
+          ? Number(targetPriceRaw.toFixed(8))
+          : Number(targetPriceRaw.toFixed(2));
+
+      const question = `Will ${getSymbol(asset)} be above $${targetPrice} in ${formatDuration(durationMinutes)}?`;
+
+      jobs.push(
+        createMarket({
+          asset,
+          question,
+          currentPrice,
+          targetPrice,
+          direction: "UP",
+          durationMinutes,
+          endDate,
+          startDate
+        })
+      );
     }
 
-    const delay = ms => new Promise(res => setTimeout(res, ms));
+    const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 
     const results = [];
 
@@ -261,8 +249,7 @@ async function generateMarkets() {
     }
 
     console.log(`🔥 ${results.length} markets created`);
-
-    console.log(`🔥 ${jobs.length} markets created (expected: 20)`);
+    console.log(`📊 Expected jobs: ${jobs.length}`);
   } catch (err) {
     console.error("❌ Bulk generation failed:", err.message);
   }
