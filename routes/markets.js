@@ -428,4 +428,92 @@ router.post("/create-sport-market", async (req, res) => {
     }
 });
 
+
+router.post("/create-x-market", async (req, res) => {
+    try {
+        const {
+            username,
+            metric,        // e.g. "tweet_count"
+            threshold,     // e.g. 4
+            durationMinutes
+        } = req.body;
+
+        if (!username || !metric || !threshold || !durationMinutes) {
+            return res.status(400).json({
+                success: false,
+                message: "username, metric, threshold, durationMinutes are required"
+            });
+        }
+
+        // ⏱ Time setup
+        const startDate = new Date();
+        const endDate = new Date(startDate.getTime() + durationMinutes * 60000);
+
+        // 🧠 Build question dynamically
+        let question = "";
+
+        if (metric === "tweet_count") {
+            question = `Will @${username} make more than ${threshold} tweets in ${durationMinutes} minutes?`;
+        } else {
+            question = `Will @${username} exceed ${threshold} ${metric} in ${durationMinutes} minutes?`;
+        }
+
+        // 🧱 Create market
+        const market = await Market.create({
+            question,
+            marketType: "X",
+
+            metadata: {
+                username,
+                metric,
+                threshold
+            },
+
+            subMarkets: [
+                {
+                    question: "Prediction",
+                    marketType: "X",
+                    outcomes: [
+                        { label: "Yes", odds: 2.0, pool: 0, percentage: 50 },
+                        { label: "No", odds: 2.0, pool: 0, percentage: 50 }
+                    ],
+                    status: "LIVE"
+                }
+            ],
+
+            startDate,
+            endDate,
+            durationMinutes,
+
+            category: "X",
+            status: "LIVE"
+        });
+
+        // 💬 Create conversation (same pattern as others)
+        const conversation = await Conversation.create({
+            market: market._id,
+            participants: [],
+            conv_type: "group",
+            latest_msg: null
+        });
+
+        // 🔗 Link back
+        market.conversationId = conversation._id;
+        await market.save();
+
+        return res.json({
+            success: true,
+            market
+        });
+
+    } catch (err) {
+        console.error("❌ create-x-market error:", err);
+        res.status(500).json({
+            success: false,
+            message: err.message
+        });
+    }
+});
+
+
 module.exports = router;

@@ -26,10 +26,11 @@ function startMarketCron() {
       }
 
       // 2. SETTLE MARKETS
-      const marketsToSettle = await Market.find({
-        status: "ENDED",
-        processing: false
-      }).limit(10);
+    const marketsToSettle = await Market.find({
+  status: "ENDED",
+  processing: false,
+  marketType: "CRYPTO"
+}).limit(10);
 
       for (const m of marketsToSettle) {
         const market = await Market.findOneAndUpdate(
