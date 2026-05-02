@@ -103,17 +103,17 @@ function startMarketCron() {
       // =========================
       // 3. GENERATE MARKETS
       // =========================
-     // =========================
-    // =========================
-   const liveCryptoCount = await Market.countDocuments({
-  status: "LIVE",
-  marketType: "CRYPTO",
-});
+      // =========================
+      // =========================
+      const liveCryptoCount = await Market.countDocuments({
+        status: "LIVE",
+        marketType: "CRYPTO",
+      });
 
-if (liveCryptoCount < 10) {
-  console.log("⚡ Generating new CRYPTO markets...");
-  await generateMarkets("CRYPTO"); // optional if your function supports it
-}
+      if (liveCryptoCount < 15) {
+        console.log("⚡ Generating new CRYPTO markets...");
+        await generateMarkets("CRYPTO"); // optional if your function supports it
+      }
 
     } catch (err) {
       console.error("❌ CRON ERROR:", err.message);
