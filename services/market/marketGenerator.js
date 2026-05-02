@@ -8,6 +8,7 @@ const { getPrice } = require("../price/priceOracle");
 const { get12hCycleTimes } = require("../marketTiming/12hCycle");
 const { get24hCycleTimes } = require("../marketTiming/24hCycle");
 const { get5mCycleTimes } = require("../marketTiming/5mCycle");
+const { get1hCycleTimes } = require("../marketTiming/1hrCycle");
 
 // console.log("SUPPORTED_ASSETS:", SUPPORTED_ASSETS);
 
@@ -182,10 +183,10 @@ async function generateMarkets() {
     const jobs = [];
 
     const cycles = [
-      // {
-      //   durationMinutes: 5,
-      //   time: get5mCycleTimes()
-      // },
+      {
+        durationMinutes: 60,
+        time: get1hCycleTimes()
+      },
       {
         durationMinutes: 720,
         time: get12hCycleTimes()
@@ -209,14 +210,19 @@ async function generateMarkets() {
         let percentMove;
 
         if (TEST_MODE) {
-          percentMove = Math.random() * 0.5 + 0.5;
+          percentMove = Math.random() * 0.3 + 0.2; // 0.2% → 0.5%
         } else {
           if (durationMinutes === 5) {
-            percentMove = Math.random() * 0.3 + 0.1; // 0.1% → 0.4%
-          } else if (durationMinutes === 720) {
-            percentMove = Math.random() * 3 + 1;
-          } else {
-            percentMove = Math.random() * 5 + 2;
+            percentMove = Math.random() * 0.15 + 0.05; // 0.05% → 0.2%
+          }
+          else if (durationMinutes === 60) {
+            percentMove = Math.random() * 0.4 + 0.2; // 0.2% → 0.6%
+          }
+          else if (durationMinutes === 720) {
+            percentMove = Math.random() * 1.2 + 0.5; // 0.5% → 1.7%
+          }
+          else {
+            percentMove = Math.random() * 2 + 1; // 1% → 3%
           }
         }
 
