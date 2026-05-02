@@ -161,7 +161,7 @@ mongoose.connect(MONGO_URI)
       startMarketCron();
     });
 
-    await deleteAllLiveCryptoMarketsOnBoot();
+    // await deleteAllLiveCryptoMarketsOnBoot();
 
     setInterval(syncWalletBalances, 30000);
 
