@@ -1,18 +1,21 @@
-// services/marketTiming/24hCycle.js
-
 function get24hCycleTimes() {
   const now = new Date();
 
-  const startOfDay = new Date(now);
-  startOfDay.setHours(0, 0, 0, 0);
+  const startDate = new Date(
+    Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate(),
+      0,
+      0,
+      0,
+      0
+    )
+  );
 
-  const nextMidnight = new Date(startOfDay);
-  nextMidnight.setDate(nextMidnight.getDate() + 1);
+  const endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000);
 
-  return {
-    startDate: startOfDay,
-    endDate: nextMidnight
-  };
+  return { startDate, endDate };
 }
 
 module.exports = { get24hCycleTimes };

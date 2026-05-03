@@ -182,28 +182,27 @@ async function generateMarkets({ durationMinutes }) {
     const jobs = [];
 
     const cycleTimes =
-      durationMinutes === 5
-        ? get5mCycleTimes()
-        : durationMinutes === 60
-          ? get1hCycleTimes()
-          : durationMinutes === 720
-            ? get12hCycleTimes()
-            : get24hCycleTimes();
+      durationMinutes === 60
+        ? get1hCycleTimes()
+        : durationMinutes === 720
+          ? get12hCycleTimes()
+          : get24hCycleTimes();
 
     const { startDate, endDate } = cycleTimes;
 
     for (const asset of shuffledTokens) {
       const currentPrice = await getPrice(asset);
-      if (!currentPrice) continue;
+
+      if (!currentPrice) {
+        console.log(`❌ No price for asset: ${asset}`);
+        continue;
+      }
 
       let percentMove;
       if (TEST_MODE) {
         percentMove = Math.random() * 0.15 + 0.1; // 0.10% → 0.25%
       } else {
-        if (durationMinutes === 5) {
-          percentMove = Math.random() * 0.08 + 0.02; // 0.02% → 0.10%
-        }
-        else if (durationMinutes === 60) {
+        if (durationMinutes === 60) {
           percentMove = Math.random() * 0.2 + 0.1; // 0.1% → 0.3%
         }
         else if (durationMinutes === 720) {

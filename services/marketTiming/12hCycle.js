@@ -1,26 +1,30 @@
 function get12hCycleTimes() {
   const now = new Date();
 
-  const startOfDay = new Date(now);
-  startOfDay.setHours(0, 0, 0, 0);
+  const startOfDay = new Date(
+    Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate(),
+      0,
+      0,
+      0,
+      0
+    )
+  );
 
-  const noon = new Date(startOfDay);
-  noon.setHours(12, 0, 0, 0);
+  const noon = new Date(startOfDay.getTime() + 12 * 60 * 60 * 1000);
+
+  const nowUTC = Date.now();
 
   let startDate, endDate;
 
-  if (now < noon) {
-    // 🟢 First cycle: 00:00 → 12:00
+  if (nowUTC < noon.getTime()) {
     startDate = startOfDay;
     endDate = noon;
   } else {
-    // 🔵 Second cycle: 12:00 → 00:00 (next day)
     startDate = noon;
-
-    const nextMidnight = new Date(startOfDay);
-    nextMidnight.setDate(nextMidnight.getDate() + 1);
-
-    endDate = nextMidnight;
+    endDate = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
   }
 
   return { startDate, endDate };

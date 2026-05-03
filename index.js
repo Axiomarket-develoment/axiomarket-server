@@ -18,10 +18,11 @@ const { startMarketCron } = require("./crons/marketCron");
 const { startOracle } = require("./services/price/priceOracle");
 const { syncWalletBalances } = require("./services/wallet/syncWalletBalance");
 const { airdropUsers } = require("./functions/airdrop");
+const { startAllCycleCrons } = require("./crons/cycleMarketCrons");
 
 // // ---------------- DNS Config ----------------
-// dnsPromises.setServers(["1.1.1.1", "8.8.8.8"]);
-// dns.setDefaultResultOrder("ipv4first");
+dnsPromises.setServers(["1.1.1.1", "8.8.8.8"]);
+dns.setDefaultResultOrder("ipv4first");
 
 // ---------------- Express Init ----------------
 
@@ -159,7 +160,9 @@ mongoose.connect(MONGO_URI)
       startOracle(),
     ]).then(() => {
       startMarketCron();
+      startAllCycleCrons(); 
     });
+
 
     // await deleteAllLiveCryptoMarketsOnBoot();
 

@@ -34,14 +34,14 @@ const SubMarketSchema = new mongoose.Schema({
 
 const MarketSchema = new mongoose.Schema({
   question:              { type: String, required: true },
-  marketType:            { type: String, enum: ["CRYPTO", "SOCIAL", "SPORT"] },
+  marketType:            { type: String, enum: ["CRYPTO", "SOCIAL", "SPORT","X"] },
   conversationId:        {type:mongoose.Schema.Types.ObjectId , ref: "Conversation" },
   subMarkets:            [SubMarketSchema],
   // sport data
   event:                 { name: String, participants: [String],  participantImages: [String],  league: String ,startTime: Date }, 
   matchStartTime:        { type: Date }, 
-  startDate:             { type: Date, required: true , set: (v) => new Date(v)},
-  endDate:               { type: Date, required: true , set: (v) => new Date(v)},
+  startDate:             { type: Date, required: true },
+  endDate:               { type: Date, required: true },
   durationMinutes:       { type: Number, required: true },
 
   // Crypto Data

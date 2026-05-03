@@ -25,17 +25,17 @@ async function runCycle(durationMinutes, minLive, label) {
 // ---------------------
 // 5 MIN CYCLE
 // ---------------------
-function start5mCron() {
-  cron.schedule("*/1 * * * *", async () => {
-    await runCycle(5, 20, "5m");
-  });
-}
+// function start5mCron() {
+//   cron.schedule("*/1 * * * *", async () => {
+//     await runCycle(5, 20, "5m");
+//   });
+// }
 
 // ---------------------
 // 1 HOUR CYCLE
 // ---------------------
 function start1hCron() {
-  cron.schedule("*/5 * * * *", async () => {
+  cron.schedule("*/1 * * * *", async () => {
     await runCycle(60, 15, "1h");
   });
 }
@@ -59,7 +59,6 @@ function start24hCron() {
 }
 
 function startAllCycleCrons() {
-  start5mCron();
   start1hCron();
   start12hCron();
   start24hCron();
