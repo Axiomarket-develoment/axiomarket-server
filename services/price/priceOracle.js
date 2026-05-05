@@ -85,9 +85,9 @@ function updateCache(data) {
 async function fetchPrices() {
     const coinGeckoMap = {
         bitcoin: "bitcoin",
-        ethereum: "ethereum",
-        binancecoin: "binancecoin",
-        solana: "solana",
+        // ethereum: "ethereum",
+        // binancecoin: "binancecoin",
+        // solana: "solana",
         "avalanche-2": "avalanche-2"
     };
 

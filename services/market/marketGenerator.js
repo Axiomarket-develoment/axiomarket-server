@@ -206,15 +206,15 @@ async function generateMarkets({ durationMinutes }) {
       }
 
       let percentMove;
-    if (TEST_MODE) {
-  percentMove = Math.random() * 0.02 + 0.01;
-} else {
-  if (durationMinutes === 5) {
-    percentMove = Math.random() * 0.04 + 0.01;
-  } else if (durationMinutes === 60) {
-    percentMove = Math.random() * 0.08 + 0.02;
-  }
-}
+      if (TEST_MODE) {
+        percentMove = Math.random() * 0.02 + 0.01;
+      } else {
+        if (durationMinutes === 5) {
+          percentMove = Math.random() * 0.04 + 0.01;
+        } else if (durationMinutes === 60) {
+          percentMove = Math.random() * 0.08 + 0.02;
+        }
+      }
 
       const targetPriceRaw =
         currentPrice * (1 + percentMove / 100);
