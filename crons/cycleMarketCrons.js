@@ -25,43 +25,44 @@ async function runCycle(durationMinutes, minLive, label) {
 // ---------------------
 // 5 MIN CYCLE
 // ---------------------
-// function start5mCron() {
-//   cron.schedule("*/1 * * * *", async () => {
-//     await runCycle(5, 20, "5m");
-//   });
-// }
+function start5mCron() {
+  cron.schedule("*/1 * * * *", async () => {
+    await runCycle(5, 20, "5m");
+  });
+}
 
 // ---------------------
 // 1 HOUR CYCLE
 // ---------------------
-function start1hCron() {
-  cron.schedule("*/1 * * * *", async () => {
-    await runCycle(60, 15, "1h");
-  });
-}
+// function start1hCron() {
+//   cron.schedule("*/1 * * * *", async () => {
+//     await runCycle(60, 15, "1h");
+//   });
+// }
 
-// ---------------------
-// 12 HOUR CYCLE
-// ---------------------
-function start12hCron() {
-  cron.schedule("*/10 * * * *", async () => {
-    await runCycle(720, 10, "12h");
-  });
-}
+// // ---------------------
+// // 12 HOUR CYCLE
+// // ---------------------
+// function start12hCron() {
+//   cron.schedule("*/10 * * * *", async () => {
+//     await runCycle(720, 10, "12h");
+//   });
+// }
 
-// ---------------------
-// 24 HOUR CYCLE
-// ---------------------
-function start24hCron() {
-  cron.schedule("*/15 * * * *", async () => {
-    await runCycle(1440, 8, "24h");
-  });
-}
+// // ---------------------
+// // 24 HOUR CYCLE
+// // ---------------------
+// function start24hCron() {
+//   cron.schedule("*/15 * * * *", async () => {
+//     await runCycle(1440, 8, "24h");
+//   });
+// }
 
 function startAllCycleCrons() {
-  start1hCron();
-  start12hCron();
-  start24hCron();
+  // start1hCron();
+  // start12hCron();
+  // start24hCron();
+  start5mCron();
 
   console.log("🚀 All cycle crons started");
 }

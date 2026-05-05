@@ -19,10 +19,12 @@ const { startOracle } = require("./services/price/priceOracle");
 const { syncWalletBalances } = require("./services/wallet/syncWalletBalance");
 const { airdropUsers } = require("./functions/airdrop");
 const { startAllCycleCrons } = require("./crons/cycleMarketCrons");
+const Ambassador = require("./models/Ambassador");
+const User = require("./models/User");
 
 // // ---------------- DNS Config ----------------
-// dnsPromises.setServers(["1.1.1.1", "8.8.8.8"]);
-// dns.setDefaultResultOrder("ipv4first");
+dnsPromises.setServers(["1.1.1.1", "8.8.8.8"]);
+dns.setDefaultResultOrder("ipv4first");
 
 // ---------------- Express Init ----------------
 
@@ -145,6 +147,44 @@ async function deleteAllLiveCryptoMarketsOnBoot() {
   }
 }
 
+async function deleteAmbassadorsWithoutUsers() {
+  try {
+    console.log("🧹 Starting ambassador cleanup...");
+
+    const ambassadors = await Ambassador.find();
+
+    let deletedCount = 0;
+    let keptCount = 0;
+
+    for (const amb of ambassadors) {
+      if (!amb.email) {
+        await Ambassador.deleteOne({ _id: amb._id });
+        deletedCount++;
+        continue;
+      }
+
+      const userExists = await User.findOne({ email: amb.email });
+
+
+
+      if (!userExists) {
+        await Ambassador.deleteOne({ _id: amb._id });
+        deletedCount++;
+        console.log(`❌ Deleted ambassador: ${amb.email}`);
+      } else {
+        keptCount++;
+      }
+    }
+
+    console.log("✅ Cleanup finished");
+    console.log(`✔ Kept: ${keptCount}`);
+    console.log(`🗑 Deleted: ${deletedCount}`);
+  } catch (err) {
+    console.error("❌ Cleanup error:", err.message);
+  }
+}
+
+
 // ---------------- Passport ----------------
 app.use(passport.initialize());
 app.use(passport.session());
@@ -160,11 +200,14 @@ mongoose.connect(MONGO_URI)
       startOracle(),
     ]).then(() => {
       startMarketCron();
-      startAllCycleCrons(); 
+      startAllCycleCrons();
     });
 
 
-    // await deleteAllLiveCryptoMarketsOnBoot();
+    await deleteAllLiveCryptoMarketsOnBoot();
+
+    // await deleteAmbassadorsWithoutUsers();
+
 
     setInterval(syncWalletBalances, 30000);
 

@@ -30,9 +30,7 @@ const HttpServer = (httpServer) => {
       socket.join(conversation_id);
       console.log("User joined room:", conversation_id);
     });
-
-
-    
+   
 
 
     socket.on("group-message", (data, callback) => {

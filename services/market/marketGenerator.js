@@ -182,11 +182,12 @@ async function generateMarkets({ durationMinutes }) {
     const jobs = [];
 
     const cycleTimes =
-      durationMinutes === 60
-        ? get1hCycleTimes()
-        : durationMinutes === 720
-          ? get12hCycleTimes()
-          : get24hCycleTimes();
+      durationMinutes === 5 ? get5mCycleTimes() : get5mCycleTimes()
+
+
+    // : durationMinutes === 720
+    //   ? get12hCycleTimes()
+    //   : get24hCycleTimes();
 
     const { startDate, endDate } = cycleTimes;
 
@@ -200,16 +201,19 @@ async function generateMarkets({ durationMinutes }) {
 
       let percentMove;
       if (TEST_MODE) {
-        percentMove = Math.random() * 0.15 + 0.1; // 0.10% → 0.25%
+        percentMove = Math.random() * 0.02 + 0.01; // 0.01% → 0.03%
       } else {
-        if (durationMinutes === 60) {
-          percentMove = Math.random() * 0.2 + 0.1; // 0.1% → 0.3%
+        if (durationMinutes === 5) {
+          percentMove = Math.random() * 0.04 + 0.01; // 🔥 0.01% → 0.05%
+        }
+        else if (durationMinutes === 60) {
+          percentMove = Math.random() * 0.08 + 0.02; // 0.02% → 0.10%
         }
         else if (durationMinutes === 720) {
-          percentMove = Math.random() * 0.6 + 0.2; // 0.2% → 0.8%
+          percentMove = Math.random() * 0.15 + 0.05; // 0.05% → 0.20%
         }
         else {
-          percentMove = Math.random() * 1.0 + 0.4; // 0.4% → 1.4%
+          percentMove = Math.random() * 0.25 + 0.08; // 0.08% → 0.33%
         }
       }
 
