@@ -34,11 +34,11 @@ function start5mCron() {
 // ---------------------
 // 1 HOUR CYCLE
 // ---------------------
-// function start1hCron() {
-//   cron.schedule("*/1 * * * *", async () => {
-//     await runCycle(60, 15, "1h");
-//   });
-// }
+function start1hCron() {
+  cron.schedule("*/5 * * * *", async () => {
+    await runCycle(60, 15, "1h");
+  });
+}
 
 // // ---------------------
 // // 12 HOUR CYCLE
@@ -59,7 +59,7 @@ function start5mCron() {
 // }
 
 function startAllCycleCrons() {
-  // start1hCron();
+  start1hCron();
   // start12hCron();
   // start24hCron();
   start5mCron();

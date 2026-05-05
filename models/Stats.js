@@ -5,6 +5,10 @@ const StatsSchema = new mongoose.Schema({
     type: Number,
     default: 150,
   },
+  kolsSlots: {
+    type: Number,
+    default: 5,
+  },
   totalFees: {
     type: Number,
     default: 0,

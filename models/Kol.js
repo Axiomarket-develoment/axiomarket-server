@@ -1,6 +1,7 @@
+
 const mongoose = require("mongoose");
 
-const ambassadorSchema = new mongoose.Schema({
+const kolSchema = new mongoose.Schema({
   user:                {type: mongoose.Schema.Types.ObjectId, ref: "User"},
 
   email:               {type:String },
@@ -16,4 +17,4 @@ const ambassadorSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
-module.exports = mongoose.model("Ambassador", ambassadorSchema);
+module.exports = mongoose.model("Kol", kolSchema);

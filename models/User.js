@@ -23,6 +23,7 @@ const UserSchema = new mongoose.Schema({
 
   referredBy:           {type: mongoose.Schema.Types.ObjectId, ref: "User" },
   isAmbassador:         {type: Boolean, default: false},
+  isKol:                {type: Boolean, default: false},
 
   avaxBalance:          { type: Number, default: 0 },
   usdBalance:           { type: Number, default: 0 },

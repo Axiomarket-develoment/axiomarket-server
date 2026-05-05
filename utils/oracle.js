@@ -49,7 +49,7 @@ async function fetchCurrentPrice(asset) {
 async function fetchOutcomeFromOracle(market) {
   const asset = market.metadata.asset;
 
-  const price = getPrice(asset);
+  const price = await getPrice(asset);
 
   if (!price) {
     console.log("❌ No cached price available");

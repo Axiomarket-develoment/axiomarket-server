@@ -204,19 +204,20 @@ mongoose.connect(MONGO_URI)
     });
 
 
-    await deleteAllLiveCryptoMarketsOnBoot();
+    // await deleteAllLiveCryptoMarketsOnBoot();
 
     // await deleteAmbassadorsWithoutUsers();
 
 
     setInterval(syncWalletBalances, 30000);
 
-    // await airdropUsers();
+    await airdropUsers();
   })
   .catch((err) => {
     console.error("❌ FULL Mongo Error:", err);
     process.exit(1);
   });
+
 
 // ---------------- Routes ----------------
 // Twitter OAuth
@@ -224,11 +225,14 @@ app.use("/user_auth", require("./routes/auth")); // Twitter login routes should 
 
 app.use("/user_market", require("./routes/markets"));
 app.use("/user_chat", require("./routes/chat"));
+
 // app.use("/user_trade", require("./routes/trade"));
 app.use("/user_waitlist", require("./routes/waitlist"));
 app.use("/user_history", require("./routes/history"));
+
 app.use("/ai", require("./routes/ai"));
 app.use("/user_ambassador", require("./routes/ambassador"));
+app.use("/user_kol", require("./routes/kol"));
 
 // Default route
 app.get("/", (req, res) => {

@@ -181,9 +181,15 @@ async function generateMarkets({ durationMinutes }) {
   try {
     const jobs = [];
 
-    const cycleTimes =
-      durationMinutes === 5 ? get5mCycleTimes() : get5mCycleTimes()
+    let cycleTimes;
 
+    if (durationMinutes === 5) {
+      cycleTimes = get5mCycleTimes();
+    } else if (durationMinutes === 60) {
+      cycleTimes = get1hCycleTimes();
+    } else {
+      throw new Error(`Unsupported duration: ${durationMinutes}`);
+    }
 
     // : durationMinutes === 720
     //   ? get12hCycleTimes()
@@ -200,22 +206,15 @@ async function generateMarkets({ durationMinutes }) {
       }
 
       let percentMove;
-      if (TEST_MODE) {
-        percentMove = Math.random() * 0.02 + 0.01; // 0.01% → 0.03%
-      } else {
-        if (durationMinutes === 5) {
-          percentMove = Math.random() * 0.04 + 0.01; // 🔥 0.01% → 0.05%
-        }
-        else if (durationMinutes === 60) {
-          percentMove = Math.random() * 0.08 + 0.02; // 0.02% → 0.10%
-        }
-        else if (durationMinutes === 720) {
-          percentMove = Math.random() * 0.15 + 0.05; // 0.05% → 0.20%
-        }
-        else {
-          percentMove = Math.random() * 0.25 + 0.08; // 0.08% → 0.33%
-        }
-      }
+    if (TEST_MODE) {
+  percentMove = Math.random() * 0.02 + 0.01;
+} else {
+  if (durationMinutes === 5) {
+    percentMove = Math.random() * 0.04 + 0.01;
+  } else if (durationMinutes === 60) {
+    percentMove = Math.random() * 0.08 + 0.02;
+  }
+}
 
       const targetPriceRaw =
         currentPrice * (1 + percentMove / 100);
