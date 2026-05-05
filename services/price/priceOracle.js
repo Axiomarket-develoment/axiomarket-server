@@ -3,10 +3,19 @@ const { TOKENS } = require("../../confiq/assets");
 const Price = require("../../models/Price");
 
 const priceCache = new Map();
-const chartCache = new Map();
 
 const ASSETS = TOKENS;
 const INTERVAL = 30000;
+const MAX_PRICE_AGE = 60_000;
+
+let oracleReady = false;
+
+// ===============================
+// HELPERS
+// ===============================
+function isFresh(timestamp) {
+    return Date.now() - new Date(timestamp).getTime() < MAX_PRICE_AGE;
+}
 
 // ===============================
 // INIT MONGO CACHE ON START
@@ -14,18 +23,26 @@ const INTERVAL = 30000;
 async function loadMongoPrices() {
     const prices = await Price.find({});
 
+    console.log(`📦 Loading ${prices.length} prices from Mongo...`);
+
     for (const p of prices) {
         priceCache.set(p.asset, {
             price: p.price,
             timestamp: p.updatedAt
         });
+
+        const age = Date.now() - new Date(p.updatedAt).getTime();
+
+        console.log(
+            `🟡 Mongo preload: ${p.asset} → $${p.price} (age: ${age}ms)`
+        );
     }
 
-    console.log("📦 Mongo prices loaded into cache");
+    console.log("📦 Mongo prices loaded into cache\n");
 }
 
 // ===============================
-// SAVE TO MONGO (SAFE WRITE)
+// SAVE TO MONGO
 // ===============================
 async function saveToMongo(asset, price) {
     try {
@@ -39,16 +56,20 @@ async function saveToMongo(asset, price) {
             },
             { upsert: true }
         );
+
+        console.log(`💾 Saved to Mongo: ${asset} → $${price}`);
     } catch (err) {
-        console.log("⚠️ Mongo price save failed:", asset);
+        console.log(`⚠️ Mongo save failed for ${asset}:`, err.message);
     }
 }
 
 // ===============================
-// UPDATE CACHE (ORACLE → MONGO SYNC)
+// UPDATE CACHE
 // ===============================
 function updateCache(data) {
     let updated = 0;
+
+    console.log("🧠 Processing oracle response...");
 
     for (const asset of ASSETS) {
         const raw = data?.[asset];
@@ -64,47 +85,64 @@ function updateCache(data) {
                 timestamp: Date.now()
             });
 
-            // 🔥 also persist to mongo
-            saveToMongo(asset, price);
+            console.log(`✅ Cache update: ${asset} → $${price}`);
 
+            const existing = priceCache.get(asset);
+
+            if (!existing || existing.price !== price) {
+                saveToMongo(asset, price);
+            }
             updated++;
+        } else {
+            console.log(`⚠️ Missing/invalid price: ${asset}`, raw);
         }
     }
 
-    if (updated === 0) {
-        console.log("⚠️ No valid prices — keeping cache + mongo fallback");
-        return;
-    }
+    console.log(`📊 Updated ${updated}/${ASSETS.length} assets`);
 
-    console.log("📦 Oracle cache updated");
+    if (updated > 0) {
+        oracleReady = true;
+        console.log("🟢 Oracle is READY\n");
+    } else {
+        console.log("⚠️ No valid prices received\n");
+    }
 }
 
 // ===============================
-// FETCH PRICES (ORACLE)
+// FETCH PRICES
 // ===============================
 async function fetchPrices() {
     const coinGeckoMap = {
         bitcoin: "bitcoin",
-        // ethereum: "ethereum",
-        // binancecoin: "binancecoin",
-        // solana: "solana",
+        ethereum: "ethereum",
+        binancecoin: "binancecoin",
+        solana: "solana",
         "avalanche-2": "avalanche-2"
     };
 
+
     const ids = Object.values(coinGeckoMap).join(",");
 
-    try {
-        const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`;
-        const res = await axios.get(url);
+    const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`;
 
-        if (!res?.data) return;
+    console.log(`🌐 Fetching prices: ${ids}`);
+
+    try {
+        const res = await axios.get(url, { timeout: 5000 });
+
+        if (!res?.data) {
+            console.log("⚠️ Empty response from API\n");
+            return;
+        }
+
+        console.log("📡 API Response:", JSON.stringify(res.data));
 
         updateCache(res.data);
-        console.log("✅ CoinGecko updated");
-        return;
+
+        console.log("✅ CoinGecko fetch success\n");
 
     } catch (err) {
-        console.log("⚠️ Oracle failed → using old cache + mongo fallback");
+        console.log("❌ Oracle error:", err.message, "\n");
     }
 }
 
@@ -112,87 +150,65 @@ async function fetchPrices() {
 // START ORACLE
 // ===============================
 async function startOracle() {
-    console.log("🚀 Oracle starting...");
+    console.log("🚀 Oracle starting...\n");
 
-    await loadMongoPrices(); // 👈 important
+    await loadMongoPrices();
 
     try {
         await fetchPrices();
-    } catch {}
+    } catch { }
 
     setInterval(fetchPrices, INTERVAL);
 }
 
 // ===============================
-// GET PRICE (HYBRID LOGIC)
+// GET PRICE
 // ===============================
 async function getPrice(asset) {
+    console.log(`🔍 Getting price for: ${asset}`);
+
     const cache = priceCache.get(asset);
 
-    // 1️⃣ FAST PATH (oracle memory)
-    if (cache?.price && !isNaN(cache.price)) {
-        return cache.price;
+    // CACHE CHECK
+    if (cache?.price) {
+        const age = Date.now() - cache.timestamp;
+
+        console.log(`🧪 Cache hit: ${asset} → $${cache.price} (age: ${age}ms)`);
+
+        if (isFresh(cache.timestamp)) {
+            console.log(`✅ Using fresh cache: ${asset}\n`);
+            return cache.price;
+        } else {
+            console.log(`⚠️ Cache stale: ${asset} (age: ${age}ms)`);
+        }
+    } else {
+        console.log(`❌ No cache entry: ${asset}`);
     }
 
-    // 2️⃣ MONGO FALLBACK
+    // MONGO CHECK
     const mongo = await Price.findOne({ asset });
 
     if (mongo?.price) {
-        console.log(`🟡 Mongo fallback used: ${asset}`);
-        return mongo.price;
+        const age = Date.now() - new Date(mongo.updatedAt).getTime();
+
+        console.log(`🟡 Mongo hit: ${asset} → $${mongo.price} (age: ${age}ms)`);
+
+        if (isFresh(mongo.updatedAt)) {
+            console.log(`✅ Using fresh mongo: ${asset}\n`);
+            return mongo.price;
+        } else {
+            console.log(`⚠️ Mongo stale: ${asset} (age: ${age}ms)`);
+        }
+    } else {
+        console.log(`❌ No mongo entry: ${asset}`);
     }
 
-    // 3️⃣ LAST RESORT
-    console.log(`❌ No price found anywhere: ${asset}`);
+    console.log(`⛔ FINAL BLOCK: No valid price for ${asset}\n`);
     return null;
-}
-
-// ===============================
-// SYNTHETIC CHART (UNCHANGED)
-// ===============================
-function buildSyntheticChart(asset, interval = 300000, limit = 120) {
-    const key = `${asset}-${interval}`;
-
-    const cached = chartCache.get(key);
-    if (cached && Date.now() - cached.timestamp < interval) {
-        return cached.data;
-    }
-
-    const priceData = priceCache.get(asset);
-    if (!priceData) return [];
-
-    let lastClose = priceData.price;
-    const now = Date.now();
-    const candles = [];
-
-    for (let i = limit; i >= 0; i--) {
-        const open = lastClose;
-
-        const change = (Math.random() - 0.5) * 0.002;
-        const close = open * (1 + change);
-
-        candles.push({
-            time: now - i * interval,
-            open,
-            high: Math.max(open, close),
-            low: Math.min(open, close),
-            close
-        });
-
-        lastClose = close;
-    }
-
-    chartCache.set(key, {
-        data: candles,
-        timestamp: Date.now()
-    });
-
-    return candles;
 }
 
 // ===============================
 module.exports = {
     startOracle,
-    getPrice,
-    buildSyntheticChart
+    getPrice
 };
