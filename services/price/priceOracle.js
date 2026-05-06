@@ -66,19 +66,20 @@ async function saveToMongo(asset, price) {
 // ===============================
 // UPDATE CACHE
 // ===============================
-function updateCache(data) {
+async function updateCache(data) {
     let updated = 0;
 
     console.log("🧠 Processing oracle response...");
 
     for (const asset of ASSETS) {
         const raw = data?.[asset];
+        let price = raw?.usd ?? raw?.USD ?? raw;
 
-        const price =
-            raw?.usd ??
-            raw?.USD ??
-            raw;
+        if (!(typeof price === "number" && !isNaN(price))) {
+            console.log(`⚠️ CoinGecko missing: ${asset}, trying Coinbase...`);
 
+            price = await fetchFromCoinbase(asset);
+        }
         if (typeof price === "number" && !isNaN(price)) {
             priceCache.set(asset, {
                 price,
@@ -137,12 +138,44 @@ async function fetchPrices() {
 
         console.log("📡 API Response:", JSON.stringify(res.data));
 
-        updateCache(res.data);
+        await updateCache(res.data);
 
         console.log("✅ CoinGecko fetch success\n");
 
     } catch (err) {
         console.log("❌ Oracle error:", err.message, "\n");
+    }
+}
+
+
+async function fetchFromCoinbase(asset) {
+    const map = {
+        bitcoin: "BTC-USD",
+        ethereum: "ETH-USD",
+        binancecoin: "BNB-USD", // ⚠️ might not exist on Coinbase
+        solana: "SOL-USD",
+        "avalanche-2": "AVAX-USD"
+    };
+
+    const symbol = map[asset];
+    if (!symbol) return null;
+
+    const url = `https://api.coinbase.com/v2/prices/${symbol}/spot`;
+
+    try {
+        const res = await axios.get(url, { timeout: 5000 });
+
+        const price = parseFloat(res.data?.data?.amount);
+
+        if (!isNaN(price)) {
+            console.log(`🟣 Coinbase fallback: ${asset} → $${price}`);
+            return price;
+        }
+
+        return null;
+    } catch (err) {
+        console.log(`❌ Coinbase error for ${asset}:`, err.message);
+        return null;
     }
 }
 
