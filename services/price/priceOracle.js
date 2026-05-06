@@ -18,6 +18,44 @@ function isFresh(timestamp) {
     return Date.now() - new Date(timestamp).getTime() < MAX_PRICE_AGE;
 }
 
+async function fetchFromCoinGecko() {
+    console.log("🟢 Using CoinGecko...");
+
+    const ids = ASSETS.join(",");
+
+    const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`;
+
+    const res = await axios.get(url, { timeout: 5000 });
+
+    if (!res?.data) {
+        throw new Error("Invalid CoinGecko response");
+    }
+
+    const data = res.data;
+
+    for (const asset of ASSETS) {
+        const price = data?.[asset]?.usd;
+
+        // ❌ IMPORTANT: force fallback if any asset missing
+        if (typeof price !== "number") {
+            throw new Error(`${asset} price missing from CoinGecko`);
+        }
+
+        priceCache.set(asset, {
+            price,
+            timestamp: Date.now()
+        });
+
+        await saveToMongo(asset, price);
+
+        console.log(`🟢 ${asset} → $${price}`);
+    }
+
+    console.log("🟢 CoinGecko success\n");
+
+    return true; // ✅ REQUIRED for fallback chain
+}
+
 async function fetchFromBinance() {
     console.log("🟡 Using Binance fallback...");
 
