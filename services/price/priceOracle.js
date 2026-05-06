@@ -53,8 +53,12 @@ async function saveToMongo(asset, price) {
 // ===============================
 // FETCH PRICES (ONLY SOURCE)
 // ===============================
+let requestCount = 0;
+
 async function fetchPrices() {
-    const ids = ASSETS.join(",");
+    requestCount++;
+    console.log(`📊 API CALL COUNT: ${requestCount}`);
+        const ids = ASSETS.join(",");
 
     const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`;
 
