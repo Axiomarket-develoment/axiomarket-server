@@ -18,6 +18,108 @@ function isFresh(timestamp) {
     return Date.now() - new Date(timestamp).getTime() < MAX_PRICE_AGE;
 }
 
+async function fetchFromBinance() {
+    console.log("🟡 Using Binance fallback...");
+
+    for (const asset of ASSETS) {
+        const symbolMap = {
+            bitcoin: "BTCUSDT",
+            ethereum: "ETHUSDT",
+            binancecoin: "BNBUSDT",
+            solana: "SOLUSDT",
+            "avalanche-2": "AVAXUSDT"
+        };
+
+        const symbol = symbolMap[asset];
+
+        const res = await axios.get(
+            `https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`
+        );
+
+        const price = Number(res.data.price);
+
+        if (price) {
+            priceCache.set(asset, {
+                price,
+                timestamp: Date.now()
+            });
+
+            await saveToMongo(asset, price);
+
+            console.log(`🟡 ${asset} → $${price}`);
+        }
+    }
+
+    console.log("🟢 Binance fallback success\n");
+}
+
+
+async function fetchFromCryptoCompare() {
+    console.log("🔴 Using CryptoCompare fallback...");
+
+    const symbolMap = {
+        bitcoin: "BTC",
+        ethereum: "ETH",
+        binancecoin: "BNB",
+        solana: "SOL",
+        "avalanche-2": "AVAX"
+    };
+
+    const symbols = Object.values(symbolMap).join(",");
+
+    const url = `https://min-api.cryptocompare.com/data/pricemulti?fsyms=${symbols}&tsyms=USD`;
+
+    const res = await axios.get(url);
+
+    const data = res.data;
+
+    for (const asset of ASSETS) {
+        const symbol = symbolMap[asset];
+
+        const price = data?.[symbol]?.USD;
+
+        if (price) {
+            priceCache.set(asset, {
+                price,
+                timestamp: Date.now()
+            });
+
+            await saveToMongo(asset, price);
+
+            console.log(`🔴 ${asset} → $${price}`);
+        }
+    }
+
+    console.log("🟢 CryptoCompare success\n");
+}
+
+async function fetchFromCoinCap() {
+    console.log("🔴 Using CoinCap fallback...");
+
+    const res = await axios.get("https://api.coincap.io/v2/assets");
+
+    const data = res.data.data;
+
+    for (const asset of ASSETS) {
+        const found = data.find(a => a.id === asset);
+
+        if (found) {
+            const price = Number(found.priceUsd);
+
+            priceCache.set(asset, {
+                price,
+                timestamp: Date.now()
+            });
+
+            await saveToMongo(asset, price);
+
+            console.log(`🔴 ${asset} → $${price}`);
+        }
+    }
+
+    console.log("🟢 CoinCap fallback success\n");
+}
+
 // ===============================
 // LOAD MONGO CACHE
 // ===============================
@@ -54,40 +156,32 @@ async function saveToMongo(asset, price) {
 // FETCH PRICES (ONLY SOURCE)
 // ===============================
 let requestCount = 0;
-
 async function fetchPrices() {
     requestCount++;
     console.log(`📊 API CALL COUNT: ${requestCount}`);
-        const ids = ASSETS.join(",");
-
-    const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`;
-
-    console.log(`🌐 Fetching prices...`);
 
     try {
-        const res = await axios.get(url, { timeout: 5000 });
+        return await fetchFromCoinGecko();
+    } catch (err) {
+        console.log("⚠️ CoinGecko failed:", err.message);
 
-        const data = res.data;
+        try {
+            return await fetchFromBinance();
+        } catch (err2) {
+            console.log("⚠️ Binance failed:", err2.message);
 
-        for (const asset of ASSETS) {
-            const price = data?.[asset]?.usd;
+            try {
+                return await fetchFromCryptoCompare();
+            } catch (err3) {
+                console.log("⚠️ CryptoCompare failed:", err3.message);
 
-            if (typeof price === "number") {
-                priceCache.set(asset, {
-                    price,
-                    timestamp: Date.now()
-                });
-
-                await saveToMongo(asset, price);
-
-                console.log(`✅ ${asset} → $${price}`);
+                try {
+                    return await fetchFromCoinCap();
+                } catch (err4) {
+                    console.log("❌ ALL 4 ORACLES FAILED");
+                }
             }
         }
-
-        console.log("🟢 Oracle update complete\n");
-
-    } catch (err) {
-        console.log("❌ Oracle fetch failed:", err.message);
     }
 }
 
