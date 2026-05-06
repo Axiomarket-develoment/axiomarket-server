@@ -5,10 +5,11 @@ const Price = require("../../models/Price");
 const priceCache = new Map();
 
 const ASSETS = TOKENS;
-const INTERVAL = 30000;
-const MAX_PRICE_AGE = 60_000;
 
-let oracleReady = false;
+// ⛔ CHANGE: 5 MINUTES ONLY
+const INTERVAL = 5 * 60 * 1000;
+
+const MAX_PRICE_AGE = 10 * 60 * 1000; // 10 min freshness
 
 // ===============================
 // HELPERS
@@ -18,229 +19,132 @@ function isFresh(timestamp) {
 }
 
 // ===============================
-// INIT MONGO CACHE ON START
+// LOAD MONGO CACHE
 // ===============================
 async function loadMongoPrices() {
     const prices = await Price.find({});
 
-    console.log(`📦 Loading ${prices.length} prices from Mongo...`);
+    console.log(`📦 Loaded ${prices.length} prices from Mongo`);
 
     for (const p of prices) {
         priceCache.set(p.asset, {
             price: p.price,
             timestamp: p.updatedAt
         });
-
-        const age = Date.now() - new Date(p.updatedAt).getTime();
-
-        console.log(
-            `🟡 Mongo preload: ${p.asset} → $${p.price} (age: ${age}ms)`
-        );
     }
-
-    console.log("📦 Mongo prices loaded into cache\n");
 }
 
 // ===============================
 // SAVE TO MONGO
 // ===============================
 async function saveToMongo(asset, price) {
-    try {
-        await Price.updateOne(
-            { asset },
-            {
-                $set: {
-                    price,
-                    updatedAt: Date.now()
-                }
-            },
-            { upsert: true }
-        );
-
-        console.log(`💾 Saved to Mongo: ${asset} → $${price}`);
-    } catch (err) {
-        console.log(`⚠️ Mongo save failed for ${asset}:`, err.message);
-    }
-}
-
-// ===============================
-// UPDATE CACHE
-// ===============================
-async function updateCache(data) {
-    let updated = 0;
-
-    console.log("🧠 Processing oracle response...");
-
-    for (const asset of ASSETS) {
-        const raw = data?.[asset];
-        let price = raw?.usd ?? raw?.USD ?? raw;
-
-        if (!(typeof price === "number" && !isNaN(price))) {
-            console.log(`⚠️ CoinGecko missing: ${asset}, trying Coinbase...`);
-
-            price = await fetchFromCoinbase(asset);
-        }
-        if (typeof price === "number" && !isNaN(price)) {
-            priceCache.set(asset, {
+    await Price.updateOne(
+        { asset },
+        {
+            $set: {
                 price,
-                timestamp: Date.now()
-            });
-
-            console.log(`✅ Cache update: ${asset} → $${price}`);
-
-            const existing = priceCache.get(asset);
-
-            if (!existing || existing.price !== price) {
-                saveToMongo(asset, price);
+                updatedAt: Date.now()
             }
-            updated++;
-        } else {
-            console.log(`⚠️ Missing/invalid price: ${asset}`, raw);
-        }
-    }
-
-    console.log(`📊 Updated ${updated}/${ASSETS.length} assets`);
-
-    if (updated > 0) {
-        oracleReady = true;
-        console.log("🟢 Oracle is READY\n");
-    } else {
-        console.log("⚠️ No valid prices received\n");
-    }
+        },
+        { upsert: true }
+    );
 }
 
 // ===============================
-// FETCH PRICES
+// FETCH PRICES (ONLY SOURCE)
 // ===============================
 async function fetchPrices() {
-    const coinGeckoMap = {
-        bitcoin: "bitcoin",
-        ethereum: "ethereum",
-        binancecoin: "binancecoin",
-        solana: "solana",
-        "avalanche-2": "avalanche-2"
-    };
-
-
-    const ids = Object.values(coinGeckoMap).join(",");
+    const ids = ASSETS.join(",");
 
     const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`;
 
-    console.log(`🌐 Fetching prices: ${ids}`);
+    console.log(`🌐 Fetching prices...`);
 
     try {
         const res = await axios.get(url, { timeout: 5000 });
 
-        if (!res?.data) {
-            console.log("⚠️ Empty response from API\n");
-            return;
+        const data = res.data;
+
+        for (const asset of ASSETS) {
+            const price = data?.[asset]?.usd;
+
+            if (typeof price === "number") {
+                priceCache.set(asset, {
+                    price,
+                    timestamp: Date.now()
+                });
+
+                await saveToMongo(asset, price);
+
+                console.log(`✅ ${asset} → $${price}`);
+            }
         }
 
-        console.log("📡 API Response:", JSON.stringify(res.data));
-
-        await updateCache(res.data);
-
-        console.log("✅ CoinGecko fetch success\n");
+        console.log("🟢 Oracle update complete\n");
 
     } catch (err) {
-        console.log("❌ Oracle error:", err.message, "\n");
-    }
-}
-
-
-async function fetchFromCoinbase(asset) {
-    const map = {
-        bitcoin: "BTC-USD",
-        ethereum: "ETH-USD",
-        binancecoin: "BNB-USD", // ⚠️ might not exist on Coinbase
-        solana: "SOL-USD",
-        "avalanche-2": "AVAX-USD"
-    };
-
-    const symbol = map[asset];
-    if (!symbol) return null;
-
-    const url = `https://api.coinbase.com/v2/prices/${symbol}/spot`;
-
-    try {
-        const res = await axios.get(url, { timeout: 5000 });
-
-        const price = parseFloat(res.data?.data?.amount);
-
-        if (!isNaN(price)) {
-            console.log(`🟣 Coinbase fallback: ${asset} → $${price}`);
-            return price;
-        }
-
-        return null;
-    } catch (err) {
-        console.log(`❌ Coinbase error for ${asset}:`, err.message);
-        return null;
+        console.log("❌ Oracle fetch failed:", err.message);
     }
 }
 
 // ===============================
 // START ORACLE
 // ===============================
+function getDelayToNext5Min() {
+    const now = new Date();
+    const minutes = now.getMinutes();
+    const seconds = now.getSeconds();
+
+    const next5 = Math.ceil(minutes / 5) * 5;
+
+    const nextRun = new Date(now);
+    nextRun.setMinutes(next5);
+    nextRun.setSeconds(0);
+    nextRun.setMilliseconds(0);
+
+    return nextRun - now;
+}
+
 async function startOracle() {
-    console.log("🚀 Oracle starting...\n");
+    console.log("🚀 Oracle starting...");
 
     await loadMongoPrices();
+    await fetchPrices(); // first snapshot
 
-    try {
-        await fetchPrices();
-    } catch { }
+    const delay = getDelayToNext5Min();
 
-    setInterval(fetchPrices, INTERVAL);
+    console.log(`⏳ First aligned fetch in ${delay / 1000}s`);
+
+    setTimeout(() => {
+        fetchPrices();
+
+        // now lock into exact 5-min intervals
+        setInterval(fetchPrices, 5 * 60 * 1000);
+
+    }, delay);
+
+    console.log("🟢 Oracle READY");
 }
 
 // ===============================
-// GET PRICE
+// GET PRICE (NO API CALLS HERE)
 // ===============================
 async function getPrice(asset) {
-    console.log(`🔍 Getting price for: ${asset}`);
-
     const cache = priceCache.get(asset);
 
-    // CACHE CHECK
-    if (cache?.price) {
-        const age = Date.now() - cache.timestamp;
-
-        console.log(`🧪 Cache hit: ${asset} → $${cache.price} (age: ${age}ms)`);
-
-        if (isFresh(cache.timestamp)) {
-            console.log(`✅ Using fresh cache: ${asset}\n`);
-            return cache.price;
-        } else {
-            console.log(`⚠️ Cache stale: ${asset} (age: ${age}ms)`);
-        }
-    } else {
-        console.log(`❌ No cache entry: ${asset}`);
+    if (cache && isFresh(cache.timestamp)) {
+        return cache.price;
     }
 
-    // MONGO CHECK
     const mongo = await Price.findOne({ asset });
 
-    if (mongo?.price) {
-        const age = Date.now() - new Date(mongo.updatedAt).getTime();
-
-        console.log(`🟡 Mongo hit: ${asset} → $${mongo.price} (age: ${age}ms)`);
-
-        if (isFresh(mongo.updatedAt)) {
-            console.log(`✅ Using fresh mongo: ${asset}\n`);
-            return mongo.price;
-        } else {
-            console.log(`⚠️ Mongo stale: ${asset} (age: ${age}ms)`);
-        }
-    } else {
-        console.log(`❌ No mongo entry: ${asset}`);
+    if (mongo) {
+        return mongo.price;
     }
 
-    console.log(`⛔ FINAL BLOCK: No valid price for ${asset}\n`);
     return null;
 }
 
-// ===============================
 module.exports = {
     startOracle,
     getPrice

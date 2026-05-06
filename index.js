@@ -21,6 +21,7 @@ const { airdropUsers } = require("./functions/airdrop");
 const { startAllCycleCrons } = require("./crons/cycleMarketCrons");
 const Ambassador = require("./models/Ambassador");
 const User = require("./models/User");
+const { startEngine } = require("./crons/mastercron");
 
 // // ---------------- DNS Config ----------------
 dnsPromises.setServers(["1.1.1.1", "8.8.8.8"]);
@@ -191,30 +192,21 @@ app.use(passport.session());
 
 // ---------------- MongoDB ----------------
 mongoose.set("strictQuery", true);
+
+
 mongoose.connect(MONGO_URI)
   .then(async () => {
     console.log("🟢 MongoDB connected successfully");
 
-    // // ✅ WAIT for oracle to fill cache FIRST
-    Promise.all([
-      startOracle(),
-    ]).then(() => {
-      startMarketCron();
-      startAllCycleCrons();
-    });
+    await startOracle(); // keep this ONCE
 
+    console.log("🟢 Oracle initialized");
 
-    // await deleteAllLiveCryptoMarketsOnBoot();
-
-    // await deleteAmbassadorsWithoutUsers();
-
-
-    setInterval(syncWalletBalances, 30000);
-
-    // await airdropUsers();
+    startEngine(); // 🔥 THIS replaces all crons
   })
+
   .catch((err) => {
-    console.error("❌ FULL Mongo Error:", err);
+    console.error("❌ Mongo Error:", err);
     process.exit(1);
   });
 
