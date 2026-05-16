@@ -18,96 +18,184 @@ router.post("/ai-insight", async (req, res) => {
       });
     }
 
-    const isSport = market.marketType === "SPORT";
+    const isFootball =
+      market.marketType === "SPORT" ||
+      market.marketMode?.startsWith("FOOTBALL");
 
-    // ✅ BUILD PROMPTS INSIDE (so market is accessible)
+    const isCrypto =
+      market.marketType === "CRYPTO" ||
+      market.marketType === "MEME COINS";
 
-    const sportPrompt = `
-You are a professional football/sports analyst.
+    const isSocial =
+      market.marketType === "SOCIAL" ||
+      market.marketType === "X";
 
-Analyze this match and give a structured insight:
+    // -----------------------------------
+    // BASE CONTEXT BUILDER
+    // -----------------------------------
 
-1️⃣ Outcome Prediction:
-Clearly state which outcome is most likely (Home / Draw / Away).
+    const baseContext = `
+Market Question: ${market.question}
+Market Type: ${market.marketType}
+Market Mode: ${market.marketMode || "N/A"}
+Start Date: ${market.startDate}
+End Date: ${market.endDate}
+Duration: ${market.durationMinutes} minutes
+`;
 
-2️⃣ Match Analysis:
-Explain based on:
-- Team form (recent matches)
-- Head-to-head record
-- Squad strength & injuries
-- Home vs away advantage
-- Motivation (league position, stakes)
+    // -----------------------------------
+    // FOOTBALL MODE PROMPT (SMART SWITCH)
+    // -----------------------------------
 
-3️⃣ Betting Insight:
-Give practical advice for a prediction market user:
-- Which side looks safer
-- Whether the market feels risky or balanced
-- DO NOT mention charts, technical indicators, or price movements
+    const footballPrompt = `
+You are an elite football prediction analyst.
 
-Match:
-${market.event?.name}
+This market is a FOOTBALL market with mode: ${market.marketMode}
 
-League:
-${market.event?.league}
+EVENT INFO:
+- Match: ${market.event?.name}
+- League: ${market.event?.league}
+- Start Time: ${market.event?.startTime}
+- Teams/Players: ${(market.event?.participants || []).join(", ")}
 
-Start Time:
-${market.event?.startTime}
+ANALYSIS RULES:
+1. Identify strongest likely outcome based on mode:
+   - FOOTBALL_MATCH → Home / Draw / Away
+   - FOOTBALL_TEAM → Team performance win likelihood
+   - FOOTBALL_PLAYER → Player performance impact
+   - FOOTBALL_OUTCOME → Specific event outcome probability
 
-Question:
+2. Consider:
+- Form
+- Injuries / squad strength
+- Head-to-head
+- Motivation
+- Tactical advantage
+
+3. Output format:
+- Prediction
+- Reasoning (clear and simple)
+- Risk level (Low / Medium / High)
+- Betting guidance (safe vs risky angle)
+
+Market Question:
 ${market.question}
 `;
+
+    // -----------------------------------
+    // CRYPTO / MEME COINS PROMPT
+    // -----------------------------------
+
+    const cryptoPrompt = `
+You are a crypto prediction market analyst.
+
+Analyze this asset-based prediction:
+
+- Asset: ${market.metadata?.assetSymbol || market.metadata?.asset}
+- Target Price: ${market.metadata?.targetPrice}
+- Start Price: ${market.metadata?.startPrice}
+- Direction: ${market.metadata?.direction}
+
+TASK:
+1. Predict likelihood of YES/NO outcome
+2. Explain using:
+- Market sentiment
+- Volatility
+- Momentum
+- Macro conditions
+
+3. Give:
+- Confidence level (0-100%)
+- Risk level (Low / Medium / High)
+- Trading advice (simple, no jargon)
+
+Market Question:
+${market.question}
+`;
+
+    // -----------------------------------
+    // SOCIAL / X PROMPT
+    // -----------------------------------
+
+    const socialPrompt = `
+You are a social prediction analyst.
+
+This market is based on social attention / influence.
+
+Context:
+- Username: ${market.metadata?.username}
+- Asset: ${market.metadata?.asset}
+
+Analyze:
+1. Likelihood of event happening (YES/NO)
+2. Social influence strength
+3. Virality potential
+4. Engagement momentum
+
+Give:
+- Prediction
+- Reasoning
+- Risk level
+- Insight for traders
+
+Market Question:
+${market.question}
+`;
+
+    // -----------------------------------
+    // DEFAULT PROMPT (GENERAL MARKETS)
+    // -----------------------------------
 
     const defaultPrompt = `
 You are a professional prediction market analyst.
 
-Analyze this market and give a structured insight:
+Analyze this market:
 
-1️⃣ Outcome Prediction:
-Clearly state whether Yes or No seems stronger.
+${baseContext}
 
-2️⃣ Reasoning:
-Explain using:
-- Market sentiment
-- Volatility
-- Trends
-- Momentum
+Outcomes:
+${
+  market.subMarkets
+    ?.map(
+      (s) =>
+        `${s.question}: ${s.outcomes?.map((o) => o.label).join(", ")}`
+    )
+    .join("\n") || "N/A"
+}
 
-3️⃣ User Advice:
-Guide the user on:
-- Using charts
-- Understanding risk
-- Choosing Yes/No
-- Using multipliers responsibly
-
-Market:
-- Question: ${market.question}
-- Type: ${market.marketType}
-- Duration: ${market.durationMinutes} minutes
-
-Options:
-${market.subMarkets
-  ?.map(
-    (s) =>
-      `${s.question}: ${s.outcomes
-        ?.map((o) => o.label)
-        .join(", ")}`
-  )
-  .join("\n")}
+TASK:
+1. Predict strongest outcome
+2. Explain reasoning clearly
+3. Give risk level (Low / Medium / High)
+4. Give user trading guidance (YES/NO bias, avoid complexity)
 `;
 
-    const prompt = isSport ? sportPrompt : defaultPrompt;
+    // -----------------------------------
+    // PICK PROMPT
+    // -----------------------------------
 
-    // ✅ GROQ CALL
+    let prompt = defaultPrompt;
+
+    if (isFootball) prompt = footballPrompt;
+    else if (isCrypto) prompt = cryptoPrompt;
+    else if (isSocial) prompt = socialPrompt;
+
+    // -----------------------------------
+    // GROQ CALL
+    // -----------------------------------
+
     const completion = await groq.chat.completions.create({
       model: "llama-3.1-8b-instant",
       messages: [
         {
           role: "system",
-          content: isSport
-            ? "You are an expert football analyst."
-            : "You are a smart prediction market analyst.",
+          content:
+            "You are a world-class prediction market analyst. Be clear, structured, and non-technical.",
         },
-        { role: "user", content: prompt },
+        {
+          role: "user",
+          content: prompt,
+        },
       ],
     });
 
@@ -115,14 +203,18 @@ ${market.subMarkets
       completion.choices?.[0]?.message?.content ||
       "AI insight unavailable.";
 
-    res.json({
+    return res.json({
       success: true,
       insight,
+      meta: {
+        marketType: market.marketType,
+        marketMode: market.marketMode,
+      },
     });
   } catch (err) {
     console.error("AI ERROR:", err);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       insight: "AI insight unavailable.",
     });

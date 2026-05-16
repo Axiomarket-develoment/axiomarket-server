@@ -18,8 +18,13 @@ async function mainCycle() {
     // await startOracle(); // or better: fetchPrices()
 
     // 2. CREATE MARKETS
-    await generateMarkets({ durationMinutes: 5 });
+    await generateMarkets({ durationMinutes: 15 });
 
+    await generateMarkets({ durationMinutes: 60 });
+
+    await generateMarkets({ durationMinutes: 360 });
+
+    await generateMarkets({ durationMinutes: 720 });
     // 3. END MARKETS
     const now = new Date();
 
@@ -65,7 +70,7 @@ async function mainCycle() {
 function startEngine() {
   console.log("🟢 ENGINE STARTED");
 
-  setInterval(mainCycle, 5 * 60 * 1000); // every 5 min
+  setInterval(mainCycle,60 * 1000); // every 1 min
 }
 
 module.exports = { startEngine };

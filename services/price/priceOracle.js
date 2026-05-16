@@ -65,7 +65,10 @@ async function fetchFromBinance() {
             ethereum: "ETHUSDT",
             binancecoin: "BNBUSDT",
             solana: "SOLUSDT",
-            "avalanche-2": "AVAXUSDT"
+            "avalanche-2": "AVAXUSDT",
+            "shiba-inu": "SHIBUSDT",
+            dogecoin: "DOGEUSDT",
+            pepe: "PEPEUSDT"
         };
 
         const symbol = symbolMap[asset];
@@ -100,7 +103,10 @@ async function fetchFromCryptoCompare() {
         ethereum: "ETH",
         binancecoin: "BNB",
         solana: "SOL",
-        "avalanche-2": "AVAX"
+        "avalanche-2": "AVAX",
+         "shiba-inu": "SHIB",
+    dogecoin: "DOGE",
+    pepe: "PEPE"
     };
 
     const symbols = Object.values(symbolMap).join(",");

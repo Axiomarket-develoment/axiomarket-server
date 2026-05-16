@@ -25,10 +25,14 @@ const UserSchema = new mongoose.Schema({
   isAmbassador:         {type: Boolean, default: false},
   isKol:                {type: Boolean, default: false},
 
+  isAdmin:              {type: Boolean},
+
   avaxBalance:          { type: Number, default: 0 },
   usdBalance:           { type: Number, default: 0 },
   lastBalanceUpdate:    { type: Number },
   lastLogin:            { type: Number },
+
+
 
   referralCode:         {type: String, unique: true, sparse: true},
   totalReferrals:       {type: Number, default: 0},

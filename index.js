@@ -2,40 +2,35 @@ require("dotenv").config();
 
 const dns = require("dns");
 const dnsPromises = require("node:dns/promises");
+
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
-const session = require("express-session");
-const MongoStore = require("connect-mongo").default;
-const passport = require("./confiq/passport"); // <-- Your Twitter strategy
-const cron = require("node-cron");
-const { createServer } = require("http");
-const { HttpServer } = require("./websocket")
+const cookieParser = require("cookie-parser");
 
+const { createServer } = require("http");
+const { HttpServer } = require("./websocket");
 
 const Market = require("./models/Market");
-const { startMarketCron } = require("./crons/marketCron");
-const { startOracle } = require("./services/price/priceOracle");
-const { syncWalletBalances } = require("./services/wallet/syncWalletBalance");
-const { airdropUsers } = require("./functions/airdrop");
-const { startAllCycleCrons } = require("./crons/cycleMarketCrons");
 const Ambassador = require("./models/Ambassador");
 const User = require("./models/User");
+
+const { startOracle } = require("./services/price/priceOracle");
 const { startEngine } = require("./crons/mastercron");
 
-// // ---------------- DNS Config ----------------
-dnsPromises.setServers(["1.1.1.1", "8.8.8.8"]);
-dns.setDefaultResultOrder("ipv4first");
+
+
+// ---------------- DNS Config ----------------
+// dnsPromises.setServers(["1.1.1.1", "8.8.8.8"]);
+// dns.setDefaultResultOrder("ipv4first");
 
 // ---------------- Express Init ----------------
-
 const app = express();
 const httpServer = createServer(app);
 
-
-
 HttpServer(httpServer);
 
+// ---------------- ENV ----------------
 const PORT = process.env.PORT || 7000;
 const MONGO_URI = process.env.MONGO_URI;
 
@@ -44,43 +39,68 @@ if (!MONGO_URI) {
   process.exit(1);
 }
 
-// const store = MongoStore.create({ mongoUrl: "mongodb://127.0.0.1:27017/test" });
-// console.log(store);
-
+app.use(cookieParser());
 // ---------------- Middleware ----------------
 app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-// CORS for frontend + credentials (important for OAuth)
-const allowedOrigins = ["http://localhost:3000", "https://axiomarket-site.vercel.app", "https://axiomarket.xyz"];
-app.use(cors({
-  origin: allowedOrigins,
-  credentials: true,
-}));
-
+app.use(
+  express.urlencoded({
+    limit: "50mb",
+    extended: true,
+  })
+);
 
 
-// ---------------- Session ----------------
-// MUST come before passport.initialize()
-app.use(session({
-  secret: process.env.SESSION_SECRET || "super_secret_key",
-  resave: true,
-  saveUninitialized: true,
-  // store: MongoStore.create({ mongoUrl: MONGO_URI }),
-  cookie: {
-    secure: process.env.NODE_ENV === "production",
-    maxAge: 24 * 60 * 60 * 1000,
-    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-  }
-}));
+// ---------------- CORS ----------------
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://axiomarket-site.vercel.app",
+  "https://axiomarket.xyz",
+];
+
+app.use(
+  cors({
+    origin: allowedOrigins,
+    credentials: true,
+  })
+);
+
+// ---------------- MongoDB ----------------
+mongoose.set("strictQuery", true);
+
+mongoose
+  .connect(MONGO_URI)
+  .then(async () => {
+    console.log("🟢 MongoDB connected successfully");
+
+    // 🔥 Start price oracle
+    await startOracle();
+
+    console.log("🟢 Oracle initialized");
+
+    // await deleteEmptyMarketsOnBoot()
+
+    // 🔥 Start master engine
+    startEngine();
+
+    console.log("🟢 Engine started");
+  })
+  .catch((err) => {
+    console.error("❌ Mongo Error:", err);
+    process.exit(1);
+  });
+
+// ---------------- Cleanup Functions ----------------
+
 async function deleteAllLiveMarketsOnBoot() {
-  const Market = require("./models/Market");
   const { adminDb } = require("./lib/firebaseAdmin");
 
   try {
     console.log("🧨 Boot cleanup: deleting LIVE markets...");
 
-    const liveMarkets = await Market.find({ status: "LIVE" });
+    const liveMarkets = await Market.find({
+      status: "LIVE",
+    });
 
     console.log(`Found ${liveMarkets.length} LIVE markets`);
 
@@ -90,9 +110,15 @@ async function deleteAllLiveMarketsOnBoot() {
       await Market.findByIdAndDelete(id);
 
       try {
-        await adminDb.collection("markets").doc(id).delete();
+        await adminDb
+          .collection("markets")
+          .doc(id)
+          .delete();
       } catch (e) {
-        console.log("⚠️ Firestore delete skipped:", e.message);
+        console.log(
+          "⚠️ Firestore delete skipped:",
+          e.message
+        );
       }
 
       console.log(`🗑 deleted: ${id}`);
@@ -100,57 +126,81 @@ async function deleteAllLiveMarketsOnBoot() {
 
     console.log("✅ Boot cleanup complete");
   } catch (err) {
-    console.error("❌ Boot delete failed:", err.message);
+    console.error(
+      "❌ Boot delete failed:",
+      err.message
+    );
   }
 }
 
 async function deleteAllLiveCryptoMarketsOnBoot() {
-  const Market = require("./models/Market");
   const { adminDb } = require("./lib/firebaseAdmin");
 
   try {
-    console.log("🧨 Boot cleanup: deleting LIVE CRYPTO markets...");
+    console.log(
+      "🧨 Boot cleanup: deleting LIVE CRYPTO markets..."
+    );
 
     const liveMarkets = await Market.find({
       status: "LIVE",
-      marketType: "CRYPTO"
+      marketType: "CRYPTO",
     }).select("_id");
 
-    console.log(`Found ${liveMarkets.length} LIVE CRYPTO markets`);
+    console.log(
+      `Found ${liveMarkets.length} LIVE CRYPTO markets`
+    );
 
     if (liveMarkets.length === 0) {
-      console.log("✅ No LIVE CRYPTO markets to delete");
+      console.log(
+        "✅ No LIVE CRYPTO markets to delete"
+      );
       return;
     }
 
-    const ids = liveMarkets.map(m => m._id.toString());
-
-    // ✅ MongoDB bulk delete
-    await Market.deleteMany({
-      _id: { $in: ids },
-      marketType: "CRYPTO"
-    });
-
-    // ✅ Firestore cleanup
-    const deletePromises = ids.map(id =>
-      adminDb.collection("markets").doc(id).delete().catch(e => {
-        console.log(`⚠️ Firestore skip ${id}:`, e.message);
-      })
+    const ids = liveMarkets.map((m) =>
+      m._id.toString()
     );
 
-    await Promise.all(deletePromises);
+    // Mongo bulk delete
+    await Market.deleteMany({
+      _id: { $in: ids },
+      marketType: "CRYPTO",
+    });
 
-    console.log(`🗑 Deleted ${ids.length} LIVE CRYPTO markets`);
+    // Firestore cleanup
+    await Promise.all(
+      ids.map((id) =>
+        adminDb
+          .collection("markets")
+          .doc(id)
+          .delete()
+          .catch((e) => {
+            console.log(
+              `⚠️ Firestore skip ${id}:`,
+              e.message
+            );
+          })
+      )
+    );
+
+    console.log(
+      `🗑 Deleted ${ids.length} LIVE CRYPTO markets`
+    );
+
     console.log("✅ Boot cleanup complete");
-
   } catch (err) {
-    console.error("❌ Boot delete failed:", err.message);
+    console.error(
+      "❌ Boot delete failed:",
+      err.message
+    );
   }
 }
 
 async function deleteAmbassadorsWithoutUsers() {
   try {
-    console.log("🧹 Starting ambassador cleanup...");
+    console.log(
+      "🧹 Starting ambassador cleanup..."
+    );
 
     const ambassadors = await Ambassador.find();
 
@@ -159,19 +209,28 @@ async function deleteAmbassadorsWithoutUsers() {
 
     for (const amb of ambassadors) {
       if (!amb.email) {
-        await Ambassador.deleteOne({ _id: amb._id });
+        await Ambassador.deleteOne({
+          _id: amb._id,
+        });
+
         deletedCount++;
         continue;
       }
 
-      const userExists = await User.findOne({ email: amb.email });
-
-
+      const userExists = await User.findOne({
+        email: amb.email,
+      });
 
       if (!userExists) {
-        await Ambassador.deleteOne({ _id: amb._id });
+        await Ambassador.deleteOne({
+          _id: amb._id,
+        });
+
         deletedCount++;
-        console.log(`❌ Deleted ambassador: ${amb.email}`);
+
+        console.log(
+          `❌ Deleted ambassador: ${amb.email}`
+        );
       } else {
         keptCount++;
       }
@@ -181,57 +240,76 @@ async function deleteAmbassadorsWithoutUsers() {
     console.log(`✔ Kept: ${keptCount}`);
     console.log(`🗑 Deleted: ${deletedCount}`);
   } catch (err) {
-    console.error("❌ Cleanup error:", err.message);
+    console.error(
+      "❌ Cleanup error:",
+      err.message
+    );
   }
 }
 
+async function deleteEmptyMarketsOnBoot() {
+  try {
+    console.log("🧹 Cleaning empty markets...");
 
-// ---------------- Passport ----------------
-app.use(passport.initialize());
-app.use(passport.session());
+    const result = await Market.deleteMany({
+      tradeCount: 0,
+      totalVolume: 0,
+    });
 
-// ---------------- MongoDB ----------------
-mongoose.set("strictQuery", true);
+    console.log(
+      `🗑 Deleted ${result.deletedCount} empty markets`
+    );
 
-
-mongoose.connect(MONGO_URI)
-  .then(async () => {
-    console.log("🟢 MongoDB connected successfully");
-
-    await startOracle(); // keep this ONCE
-
-    console.log("🟢 Oracle initialized");
-
-    startEngine(); // 🔥 THIS replaces all crons
-  })
-
-  .catch((err) => {
-    console.error("❌ Mongo Error:", err);
-    process.exit(1);
-  });
-
+    console.log(
+      "✅ Empty market cleanup complete"
+    );
+  } catch (err) {
+    console.error(
+      "❌ Empty market cleanup failed:",
+      err.message
+    );
+  }
+}
 
 // ---------------- Routes ----------------
-// Twitter OAuth
-app.use("/user_auth", require("./routes/auth")); // Twitter login routes should be here
+app.use("/user_auth", require("./routes/auth"));
 
 app.use("/user_market", require("./routes/markets"));
+
 app.use("/user_chat", require("./routes/chat"));
 
-// app.use("/user_trade", require("./routes/trade"));
 app.use("/user_waitlist", require("./routes/waitlist"));
+
 app.use("/user_history", require("./routes/history"));
 
 app.use("/ai", require("./routes/ai"));
+
 app.use("/user_ambassador", require("./routes/ambassador"));
+
 app.use("/user_kol", require("./routes/kol"));
 
-// Default route
+app.use("/user_match", require("./routes/match"));
+
+app.use("/user_player", require("./routes/player"));
+
+
+app.use("/admin_auth" , require("./routes/admin/auth"))
+app.use("/admin_market" , require("./routes/admin/market"))
+
+// ---------------- Default Route ----------------
 app.get("/", (req, res) => {
   res.send("Server running!");
 });
 
-// ---------------- Start server ----------------
+
+
+
+
+
+
+// ---------------- Start Server ----------------
 httpServer.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT} with Socket.IO`);
+  console.log(
+    `🚀 Server running on port ${PORT} with Socket.IO`
+  );
 });

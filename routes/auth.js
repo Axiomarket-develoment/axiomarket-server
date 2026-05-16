@@ -1,18 +1,21 @@
 const express = require("express");
 const router = express.Router();
-const passport = require("../confiq/passport");
+
 const bcrypt = require("bcryptjs");
 const fetch = require("node-fetch");
+const jwt = require("jsonwebtoken");
 
 const User = require("../models/User");
-// const { adminDb } = require("../lib/firebaseAdmin");
-const jwt = require("jsonwebtoken");
-const JWT_SECRET = process.env.JWT_SECRET;
-const { getPrice } = require("../services/price/priceOracle");
+
 const calcUserBalance = require("../services/balance/calcUserBalance");
 
+const JWT_SECRET = process.env.JWT_SECRET;
 
+const setAuthCookie = require("../utils/setAuthCookie");
 
+// ==========================
+// 🔥 SYNC USER BALANCE
+// ==========================
 async function syncUserBalance(user, options = {}) {
     if (!user?._id) return;
 
@@ -26,94 +29,91 @@ async function syncUserBalance(user, options = {}) {
     return updated;
 }
 
+// ==========================
+// 🔥 GOOGLE AUTH
+// ==========================
 router.post("/google", async (req, res) => {
     try {
         const { token: accessToken } = req.body;
 
         const userInfoRes = await fetch(
             "https://www.googleapis.com/oauth2/v3/userinfo",
-            { headers: { Authorization: `Bearer ${accessToken}` } }
+            {
+                headers: {
+                    Authorization: `Bearer ${accessToken}`
+                }
+            }
         );
 
         const payload = await userInfoRes.json();
+
         const { email, name } = payload;
 
         if (!email) {
-            return res.status(400).json({ error: "No email from Google" });
+            return res.status(400).json({
+                error: "No email from Google"
+            });
         }
 
-        const username = name?.replace(/\s+/g, "").toLowerCase() || email.split("@")[0];
+        const username =
+            name?.replace(/\s+/g, "").toLowerCase() ||
+            email.split("@")[0];
 
         let user = await User.findOne({ email });
 
-        // ✅ If NOT exist → create
+        // ✅ Create user if not exists
         if (!user) {
             user = await User.create({
                 email,
                 fullName: name,
                 username,
                 authProvider: "google",
-                balance: { testnet: 100, locked: 0 },
-                wallet: { address: "", privateKey: "" },
+                balance: {
+                    testnet: 100,
+                    locked: 0
+                },
+                wallet: {
+                    address: "",
+                    privateKey: ""
+                }
             });
         }
 
-        // 🔥 Always sync to Firestore
-        await syncUserBalance(user, "");
+        // 🔥 Sync balance
+        await syncUserBalance(user, {
+            provider: "google"
+        });
 
         const freshUser = await User.findById(user._id);
-        // JWT
+
+        // 🔥 Generate JWT
         const token = jwt.sign(
             {
                 id: user._id.toString(),
-                email: user.email
+                email: user.email,
+                isAdmin: user.isAdmin || false
+
             },
             JWT_SECRET,
-            { expiresIn: "30d" }
+            {
+                expiresIn: "30d"
+            }
         );
 
-        res.json({ success: true, token, user: freshUser });
+        console.log(token)
+        // 🔥 Set HttpOnly cookie
+        setAuthCookie(res, token);
 
-    } catch (err) {
-        console.error("Google auth error:", err);
-        res.status(500).json({ error: "Internal server error" });
-    }
-});
-
-
-router.post("/check-token", async (req, res) => {
-    try {
-        const { token } = req.body;
-
-        if (!token) {
-            return res.status(400).json({
-                valid: false,
-                message: "No token provided"
-            });
-        }
-
-        const decoded = jwt.verify(token, JWT_SECRET);
-
-        return res.json({
-            valid: true,
-            expired: false,
-            userId: decoded.id,
-            email: decoded.email || null
+        res.json({
+            success: true,
+            user: freshUser
         });
 
     } catch (err) {
-        if (err.name === "TokenExpiredError") {
-            return res.status(401).json({
-                valid: false,
-                expired: true,
-                message: "Token expired"
-            });
-        }
+        console.error("Google auth error:", err);
 
-        return res.status(401).json({
-            valid: false,
-            expired: false,
-            message: "Invalid token"
+        res.status(500).json({
+            error: "Internal server error"
         });
     }
 });
@@ -128,7 +128,9 @@ router.post("/signup", async (req, res) => {
         let user = await User.findOne({ email });
 
         if (user) {
-            return res.status(400).json({ message: "Email already exists. Please login." });
+            return res.status(400).json({
+                message: "Email already exists. Please login."
+            });
         }
 
         const hashed = await bcrypt.hash(password, 10);
@@ -138,23 +140,43 @@ router.post("/signup", async (req, res) => {
             password: hashed,
             username,
             authProvider: "email",
-            balance: { testnet: 100, locked: 0 }
+            balance: {
+                testnet: 100,
+                locked: 0
+            }
         });
 
-        await syncUserBalance(user, { provider: "email" });
+        await syncUserBalance(user, {
+            provider: "email"
+        });
 
         const token = jwt.sign(
             {
                 id: user._id.toString(),
-                email: user.email
+                email: user.email,
+                isAdmin: user.isAdmin || false
+
             },
             JWT_SECRET,
-            { expiresIn: "30d" }
+            {
+                expiresIn: "30d"
+            }
         );
-        res.json({ user, token });
+
+        // 🔥 Set HttpOnly cookie
+        setAuthCookie(res, token);
+
+        res.json({
+            success: true,
+            user
+        });
 
     } catch (err) {
-        res.status(500).json({ message: "Signup failed" });
+        console.error("Signup error:", err);
+
+        res.status(500).json({
+            message: "Signup failed"
+        });
     }
 });
 
@@ -162,73 +184,62 @@ router.post("/signup", async (req, res) => {
 // 🔥 EMAIL LOGIN
 // ==========================
 router.post("/login", async (req, res) => {
-    console.log("📥 LOGIN REQUEST RECEIVED");
-
     try {
         const { email, password } = req.body;
-        console.log("📧 Email:", email);
-        console.log("🔑 Password provided:", !!password);
 
-        // 1️⃣ Find user
+        // 🔍 Find user
         const user = await User.findOne({ email });
-        console.log("🔍 User lookup result:", user ? "FOUND" : "NOT FOUND");
 
         if (!user) {
-            console.log("❌ User not found");
-            return res.status(400).json({ message: "User not found" });
-        }
-
-        // 2️⃣ Check auth provider
-        console.log("🧠 Auth provider:", user.auhtProvider);
-        if (!user.password) {
-            console.log("⚠️ No password set (social login user)");
             return res.status(400).json({
-                message: "This account was created with Google/Twitter. Please use that method."
+                message: "User not found"
             });
         }
 
-        // 3️⃣ Compare password
-        const match = await bcrypt.compare(password, user.password);
-        console.log("🔐 Password match:", match);
-
-        if (!match) {
-            console.log("❌ Invalid password");
-            return res.status(400).json({ message: "Invalid credentials" });
+        // ⚠️ Social login account
+        if (!user.password) {
+            return res.status(400).json({
+                message: "This account was created with Google. Please use Google login."
+            });
         }
 
-        // 4️⃣ Telegram status
-        console.log("📲 Telegram connected:", user.telegram?.connected);
-        console.log("🎟️ Telegram token:", user.telegramToken);
+        // 🔐 Compare password
+        const match = await bcrypt.compare(
+            password,
+            user.password
+        );
 
-        // 5️⃣ Wallet status
-        console.log("💰 Wallet connected:", user.wallet?.connected);
+        if (!match) {
+            return res.status(400).json({
+                message: "Invalid credentials"
+            });
+        }
 
-        // 6️⃣ NFT status
-        console.log("🖼️ NFT paid:", user.nft?.paid);
+        // 🔥 Sync balance
+        await syncUserBalance(user, {
+            provider: "email"
+        });
 
-        // 7️⃣ Sync Firestore
-        console.log("🔥 Syncing to Firestore...");
-        await syncUserBalance(user, { provider: "email" });
-        console.log("✅ Firestore sync complete");
-
-        // 8️⃣ Generate token
+        // 🔥 Generate JWT
         const token = jwt.sign(
             {
                 id: user._id.toString(),
-                email: user.email
+                email: user.email,
+                isAdmin: user.isAdmin || false
+
             },
             JWT_SECRET,
-            { expiresIn: "30d" }
+            {
+                expiresIn: "30d"
+            }
         );
 
-        console.log("🎫 JWT generated");
-
-        // 9️⃣ Final response
-        console.log("✅ LOGIN SUCCESS");
+        // 🔥 Set HttpOnly cookie
+        setAuthCookie(res, token);
 
         res.json({
+            success: true,
             user,
-            token,
             debug: {
                 telegramConnected: user.telegram?.connected,
                 walletConnected: user.wallet?.connected,
@@ -237,52 +248,62 @@ router.post("/login", async (req, res) => {
         });
 
     } catch (err) {
-        console.error("💥 LOGIN ERROR:", err);
-        res.status(500).json({ message: "Login failed" });
+        console.error("Login error:", err);
+
+        res.status(500).json({
+            message: "Login failed"
+        });
     }
 });
+
 // ==========================
-// 🔥 TWITTER AUTH
+// 🔥 GET CURRENT USER
 // ==========================
-router.get("/twitter", passport.authenticate("twitter"));
+router.get("/me", async (req, res) => {
+    try {
+        const token = req.cookies.token;
 
-router.get(
-    "/twitter/callback",
-    passport.authenticate("twitter"),
-    async (req, res) => {
-        try {
-            let user = req.user;
-
-            // 🔥 CRITICAL: Merge by email if exists
-            if (user.email) {
-                const existing = await User.findOne({ email: user.email });
-
-                if (existing) {
-                    user = existing; // use existing account
-                }
-            }
-
-            await syncUserBalance(user, { provider: "twitter" });
-
-            const token = jwt.sign(
-                { id: user._id },
-                JWT_SECRET,
-                { expiresIn: "7d" }
-            );
-
-            const encodedUser = encodeURIComponent(
-                Buffer.from(JSON.stringify({ ...user.toObject(), token })).toString("base64")
-            );
-
-            const frontendUrl = process.env.USER_FRONTEND_URL || "http://localhost:5173";
-
-            res.redirect(`${frontendUrl}/market?token=${token}&user=${encodedUser}`);
-
-        } catch (err) {
-            console.error("Twitter callback error:", err);
-            res.redirect(process.env.USER_FRONTEND_URL);
+        if (!token) {
+            return res.status(401).json({
+                message: "Unauthorized"
+            });
         }
+
+        const decoded = jwt.verify(
+            token,
+            JWT_SECRET
+        );
+
+        const user = await User.findById(decoded.id);
+
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found"
+            });
+        }
+
+        res.json({
+            success: true,
+            user
+        });
+
+    } catch (err) {
+        res.status(401).json({
+            message: "Invalid token"
+        });
     }
-);
+});
+
+// ==========================
+// 🔥 LOGOUT
+// ==========================
+router.post("/logout", (req, res) => {
+    res.clearCookie("token");
+
+    res.json({
+        success: true,
+        message: "Logged out successfully"
+    });
+});
 
 module.exports = router;

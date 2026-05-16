@@ -2,17 +2,17 @@ const jwt = require("jsonwebtoken");
 const Message = require("../models/Message");
 const Conversation = require("../models/conversation");
 const User = require("../models/User");
+const auth = require("../middlewave/auth");
 
-const groupChatMessage = async (data, socket, io, callback) => {
+const groupChatMessage =  async (data, socket, io, callback) => {
   try {
-    const { token, conversation_id, message, msg_type } = data;
+    const { conversation_id, message, msg_type } = data;
 
-    if (!token || !conversation_id || !message) {
+    if (!conversation_id || !message) {
       return socket.emit("receive-error-message", "Missing required fields");
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const senderId = decoded.id;
+    const senderId = socket.user.id;
 
     const user = await User.findById(senderId).select("username");
     const sender_name = user?.username || "User";

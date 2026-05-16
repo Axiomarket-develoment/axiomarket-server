@@ -9,6 +9,8 @@ const { get12hCycleTimes } = require("../marketTiming/12hCycle");
 const { get24hCycleTimes } = require("../marketTiming/24hCycle");
 const { get5mCycleTimes } = require("../marketTiming/5mCycle");
 const { get1hCycleTimes } = require("../marketTiming/1hrCycle");
+const { get15mCycleTimes } = require("../marketTiming/15mCycle");
+const { get6hCycleTimes } = require("../marketTiming/6hCycle");
 
 // console.log("SUPPORTED_ASSETS:", SUPPORTED_ASSETS);
 
@@ -82,6 +84,15 @@ function formatDuration(minutes) {
   return `${minutes}m`;
 }
 
+function getMarketType(asset) {
+  const memeCoins = ["shiba-inu", "dogecoin", "pepe"];
+
+  if (memeCoins.includes(asset)) {
+    return "MEME COINS";
+  }
+
+  return "CRYPTO";
+}
 
 
 async function createMarket({
@@ -123,7 +134,7 @@ async function createMarket({
     const baseSubMarkets = [
       {
         question,
-        marketType: "CRYPTO",
+        marketType: getMarketType(asset),
         outcomes: [
           { label: "Yes", result: false, odds: 2.0, pool: 0, liquidity: 0, volume: 0, count: 0 },
           { label: "No", result: false, odds: 2.0, pool: 0, liquidity: 0, volume: 0, count: 0 }
@@ -137,7 +148,7 @@ async function createMarket({
     // 3️⃣ Create market (MONGO)
     const market = new Market({
       question,
-      marketType: "CRYPTO",
+      marketType: getMarketType(asset),
       conversationId: convo._id,
 
       subMarkets: baseSubMarkets,
@@ -183,10 +194,18 @@ async function generateMarkets({ durationMinutes }) {
 
     let cycleTimes;
 
-    if (durationMinutes === 5) {
-      cycleTimes = get5mCycleTimes();
+    if (durationMinutes === 15) {
+      cycleTimes = get15mCycleTimes();
+
     } else if (durationMinutes === 60) {
       cycleTimes = get1hCycleTimes();
+
+    } else if (durationMinutes === 360) {
+      cycleTimes = get6hCycleTimes();
+
+    } else if (durationMinutes === 720) {
+      cycleTimes = get12hCycleTimes();
+
     } else {
       throw new Error(`Unsupported duration: ${durationMinutes}`);
     }
@@ -209,10 +228,17 @@ async function generateMarkets({ durationMinutes }) {
       if (TEST_MODE) {
         percentMove = Math.random() * 0.02 + 0.01;
       } else {
-        if (durationMinutes === 5) {
+        if (durationMinutes === 15) {
           percentMove = Math.random() * 0.04 + 0.01;
+
         } else if (durationMinutes === 60) {
           percentMove = Math.random() * 0.08 + 0.02;
+
+        } else if (durationMinutes === 360) {
+          percentMove = Math.random() * 0.15 + 0.05;
+
+        } else if (durationMinutes === 720) {
+          percentMove = Math.random() * 0.25 + 0.10;
         }
       }
 
@@ -258,4 +284,6 @@ async function generateMarkets({ durationMinutes }) {
 }
 
 
+
 module.exports = { generateMarkets, TEST_MODE };
+

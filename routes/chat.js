@@ -5,19 +5,19 @@ const jwt = require("jsonwebtoken");
 const Conversation = require("../models/conversation");
 const User = require("../models/User"); // adjust if your user model name is different
 const Message = require("../models/Message");
+const auth = require("../middlewave/auth");
 
 // POST /user_chat/get_messages
-router.post("/get_messages", async (req, res) => {
+router.post("/get_messages", auth, async (req, res) => {
   try {
-    const { token, conversationId } = req.body;
+    const { conversationId } = req.body;
 
-    if (!token || !conversationId) {
+    if (!conversationId) {
       return res.status(400).json({ success: false, msg: "Missing token or conversationId" });
     }
 
     // Verify user
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const userId = decoded.id || decoded.userId || decoded._id;
+    const userId = req.user.id
 
     if (!userId) {
       return res.status(401).json({ error: "Invalid token payload" });

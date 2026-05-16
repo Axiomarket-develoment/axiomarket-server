@@ -15,7 +15,7 @@ const SubMarketSchema = new mongoose.Schema({
                                 percentage: { type: Number, default: 50 }
                             }
                          ],
-  marketType:            { type: String, enum: ["CRYPTO", "SOCIAL", "SPORT"] },
+  marketType:            { type: String, enum: ["CRYPTO","MEME COINS", "SOCIAL","X", "SPORT"] },
   tradeCount:            { type: Number, default: 0 },
 
   lastPrice:             {type: Number , default: 2.0},
@@ -33,8 +33,10 @@ const SubMarketSchema = new mongoose.Schema({
 });
 
 const MarketSchema = new mongoose.Schema({
+
+  createdBy:             {type: mongoose.Schema.Types.ObjectId, ref: "User", required: false},
   question:              { type: String, required: true },
-  marketType:            { type: String, enum: ["CRYPTO", "SOCIAL", "SPORT","X"] },
+  marketType:            { type: String, enum: ["CRYPTO","MEME COINS", "SOCIAL", "SPORT","X"] },
   conversationId:        {type:mongoose.Schema.Types.ObjectId , ref: "Conversation" },
   subMarkets:            [SubMarketSchema],
   // sport data
@@ -54,6 +56,8 @@ const MarketSchema = new mongoose.Schema({
 
   metadata:              {
                           asset: String,
+                          username: String,
+                          profileImage: String,
                           assetLogo: String,   // ✅ ADD THIS
                           chartImage: String,
                           startPrice: Number,
@@ -61,7 +65,18 @@ const MarketSchema = new mongoose.Schema({
                           assetSymbol: String,
                           direction: String
                          },
-  result:                { type: String, enum: ["YES", "NO"], default: null },
+
+
+  marketMode:            {
+                            type: String,
+                            enum: [
+                                "FOOTBALL_PLAYER",
+                                "FOOTBALL_TEAM",
+                                "FOOTBALL_MATCH",
+                                "FOOTBALL_OUTCOME"
+                              ]
+                         },
+  result:                { type: String,  default: null },
   createdAt:             { type: Date, default: Date.now },
 
   processing:            {type: Boolean, default: false},

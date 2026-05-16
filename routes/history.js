@@ -3,17 +3,12 @@ const router = express.Router();
 const Position = require("../models/Position");
 const Market = require("../models/Market");
 const jwt = require("jsonwebtoken");
+const auth = require("../middlewave/auth");
 
-router.get("/get_history", async (req, res) => {
+router.get("/get_history", auth, async (req, res) => {
     try {
-        const token = req.headers.authorization?.split(" ")[1];
-
-        if (!token) {
-            return res.status(401).json({ error: "Unauthorized" });
-        }
-
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const userId = decoded.id || decoded.userId || decoded._id;
+      
+        const userId = req.user.id
 
         if (!userId) {
             return res.status(401).json({ error: "Invalid token payload" });
