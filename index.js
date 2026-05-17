@@ -326,6 +326,8 @@ app.get("/test-cookie", (req, res) => {
 });
 
 app.get("/debug-cookie", (req, res) => {
+  console.log("COOKIES:", req.cookies);
+
   res.json({
     cookies: req.cookies,
     hasToken: !!req.cookies.token
