@@ -21,8 +21,8 @@ const { startEngine } = require("./crons/mastercron");
 
 
 // ---------------- DNS Config ----------------
-// dnsPromises.setServers(["1.1.1.1", "8.8.8.8"]);
-// dns.setDefaultResultOrder("ipv4first");
+dnsPromises.setServers(["1.1.1.1", "8.8.8.8"]);
+dns.setDefaultResultOrder("ipv4first");
 
 // ---------------- Express Init ----------------
 const app = express();
@@ -312,27 +312,29 @@ app.get("/", (req, res) => {
   res.send("Server running!");
 });
 
-app.get("/test-cookie", (req, res) => {
-  res.cookie("test_token", "123456", {
-    httpOnly: true,
-    secure: true,
-    sameSite: "none",
-  });
 
-  res.json({
-    success: true,
-    message: "Cookie set",
-  });
-});
 
-app.get("/debug-cookie", (req, res) => {
-  console.log("COOKIES:", req.cookies);
+// app.get("/test-cookie", (req, res) => {
+//   res.cookie("test_token", "123456", {
+//     httpOnly: true,
+//     secure: true,
+//     sameSite: "none",
+//   });
 
-  res.json({
-    cookies: req.cookies,
-    hasToken: !!req.cookies.token
-  });
-});
+//   res.json({
+//     success: true,
+//     message: "Cookie set",
+//   });
+// });
+
+// app.get("/debug-cookie", (req, res) => {
+//   console.log("COOKIES:", req.cookies);
+
+//   res.json({
+//     cookies: req.cookies,
+//     hasToken: !!req.cookies.token
+//   });
+// });
 
 
 

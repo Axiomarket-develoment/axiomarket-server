@@ -27,7 +27,7 @@ function validateMarketEntryImpact({
     const outcomes = subMarket.outcomes;
 
 
-     const totalPoolBefore = outcomes.reduce((a, o) => a + (o.pool || 0), 0);
+    const totalPoolBefore = outcomes.reduce((a, o) => a + (o.pool || 0), 0);
 
     // ✅ FIX 1: allow first trade
     if (totalPoolBefore === 0) {
@@ -216,7 +216,7 @@ router.post("/user_enter_market", auth, async (req, res) => {
             });
         }
 
-       
+
 
         const avaxPrice = await getPrice("avalanche-2");
 
@@ -236,7 +236,7 @@ router.post("/user_enter_market", auth, async (req, res) => {
 
         const subMarket = market.subMarkets.id(subMarketId);
 
-         const validation = validateMarketEntryImpact({
+        const validation = validateMarketEntryImpact({
             subMarket,
             outcomeLabel: outcome,
             incomingAmount: netUsd,
@@ -703,7 +703,7 @@ router.post("/user_market_creaiton", auth, async (req, res) => {
             (a) => a.user?.toString() === userId.toString()
         );
         // ✅ EMAIL WHITELIST
-        const allowedEmails = ["derik0x0x@gmail.com"];
+        const allowedEmails = ["derik0x0x@gmail.com","ositanwaubani@gmail.com"];
 
 
         const isWhitelistedEmail = allowedEmails.includes(user?.email);
