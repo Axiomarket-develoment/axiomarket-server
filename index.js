@@ -26,6 +26,9 @@ const { startEngine } = require("./crons/mastercron");
 
 // ---------------- Express Init ----------------
 const app = express();
+
+app.set("trust proxy", 1);
+
 const httpServer = createServer(app);
 
 HttpServer(httpServer);
@@ -52,15 +55,23 @@ app.use(
 
 
 // ---------------- CORS ----------------
-const allowedOrigins = [
-  "http://localhost:3000",
-  "https://axiomarket-site.vercel.app",
-  "https://axiomarket.xyz",
-];
-
 app.use(
   cors({
-    origin: allowedOrigins,
+    origin: function (origin, callback) {
+      const allowedOrigins = [
+        "http://localhost:3000",
+        "https://axiomarket-site.vercel.app",
+        "https://axiomarket.xyz",
+      ];
+
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error("Not allowed by CORS"));
+    },
     credentials: true,
   })
 );
@@ -293,12 +304,25 @@ app.use("/user_match", require("./routes/match"));
 app.use("/user_player", require("./routes/player"));
 
 
-app.use("/admin_auth" , require("./routes/admin/auth"))
-app.use("/admin_market" , require("./routes/admin/market"))
+app.use("/admin_auth", require("./routes/admin/auth"))
+app.use("/admin_market", require("./routes/admin/market"))
 
 // ---------------- Default Route ----------------
 app.get("/", (req, res) => {
   res.send("Server running!");
+});
+
+app.get("/test-cookie", (req, res) => {
+  res.cookie("test_token", "123456", {
+    httpOnly: true,
+    secure: true,
+    sameSite: "none",
+  });
+
+  res.json({
+    success: true,
+    message: "Cookie set",
+  });
 });
 
 
