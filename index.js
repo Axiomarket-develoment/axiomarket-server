@@ -312,18 +312,18 @@ app.get("/", (req, res) => {
   res.send("Server running!");
 });
 
-app.get("/test-cookie", (req, res) => {
-  res.cookie("test_token", "123456", {
-    httpOnly: true,
-    secure: true,
-    sameSite: "none",
-  });
+// app.get("/test-cookie", (req, res) => {
+//   res.cookie("test_token", "123456", {
+//     httpOnly: true,
+//     secure: true,
+//     sameSite: "none",
+//   });
 
-  res.json({
-    success: true,
-    message: "Cookie set",
-  });
-});
+//   res.json({
+//     success: true,
+//     message: "Cookie set",
+//   });
+// });
 
 
 
