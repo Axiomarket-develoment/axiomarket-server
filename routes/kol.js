@@ -59,7 +59,7 @@ Router.get("/kol_stats", async (req, res) => {
     return res.status(200).json({
       success: true,
       slots: stats.kolsSlots,
-      marketPercent: 25,
+      marketPercent: 45,
       referralPercent: 5
     });
 
@@ -148,7 +148,7 @@ Router.post("/kol_register", async (req, res) => {
 
     const kol = await Kol.create({
       email,
-      marketPercent: 25,
+      marketPercent: 45,
       referralPercent: 5,
       user: null // 👈 important (since not linked yet)
     });

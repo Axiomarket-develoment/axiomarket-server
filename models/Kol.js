@@ -6,7 +6,7 @@ const kolSchema = new mongoose.Schema({
 
   email:               {type:String },
 
-  marketPercent:       {type:Number, default: 10},
+  marketPercent:       {type:Number, default: 45},
   referralPercent:     {type:Number, default: 5},
 
   totalReferals:       {type:Number, default: 0},
