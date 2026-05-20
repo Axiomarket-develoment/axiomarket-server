@@ -20,8 +20,8 @@ const { startEngine } = require("./crons/mastercron");
 
 
 // ---------------- DNS Config ----------------
-dnsPromises.setServers(["1.1.1.1", "8.8.8.8"]);
-dns.setDefaultResultOrder("ipv4first");
+// dnsPromises.setServers(["1.1.1.1", "8.8.8.8"]);
+// dns.setDefaultResultOrder("ipv4first");
 
 // ---------------- Express Init ----------------
 const app = express();
