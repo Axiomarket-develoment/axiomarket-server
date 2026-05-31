@@ -1,16 +1,13 @@
 const { ethers } = require("ethers");
 
-function generateAvalancheWallet() {
-    const wallet = ethers.Wallet.createRandom();
-    return wallet;
+function generateWallet() {
+  const wallet = ethers.Wallet.createRandom();
+
+  return {
+    address: wallet.address,
+    privateKey: wallet.privateKey,
+    mnemonic: wallet.mnemonic.phrase,
+  };
 }
 
-(async () => {
-    const wallet = generateAvalancheWallet();
-    console.log("🔥 Wallet generated:");
-    console.log("Address:", wallet.address);
-    console.log("Private Key:", wallet.privateKey);
-    console.log("Mnemonic:", wallet.mnemonic.phrase);
-})();
-
-module.exports = { generateAvalancheWallet }
+module.exports = { generateWallet };

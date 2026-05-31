@@ -1,23 +1,23 @@
-// services/balance/calcUserBalance.js
-
 const { getPrice } = require("../price/priceOracle");
 
 function round2(num) {
     return Math.floor(num * 100) / 100;
 }
 
-async function calcUserBalance(user, options = {}) {
+async function calcUserBalance(user) {
     const price = await getPrice("avalanche-2");
 
-    let avaxBalance = user.avaxBalance || 0;
+    let avaxBalance = user.balances?.AVAX || 0;
 
-    if (price && price > 0) {
-        avaxBalance = round2(user.balance.testnet / price);
-    }
+    // optional USD view (derived, not stored truth)
+    const usdBalance = price
+        ? round2(avaxBalance * price)
+        : 0;
 
     return {
-        avaxBalance,
-        usdBalance: round2(user.balance?.testnet || 0),
+        avaxBalance: round2(avaxBalance),
+        usdBalance,
+        lockedUsd: user.lockedUsd || 0,
         lastBalanceUpdate: Date.now()
     };
 }

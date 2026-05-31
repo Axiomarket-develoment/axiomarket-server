@@ -1,15 +1,18 @@
 const axios = require("axios");
 const { TOKENS } = require("../../confiq/assets");
 const Price = require("../../models/Price");
+const PriceSnapshot = require("../../models/PriceSnapshot");
 
 const priceCache = new Map();
+const lastSnapshotTime = {};
 
 const ASSETS = TOKENS;
 
-// ⛔ CHANGE: 5 MINUTES ONLY
-const INTERVAL = 5 * 60 * 1000;
-
+// ===============================
+// CONFIG
+// ===============================
 const MAX_PRICE_AGE = 10 * 60 * 1000; // 10 min freshness
+const SNAPSHOT_INTERVAL = 30 * 60 * 1000; // 30 min
 
 // ===============================
 // HELPERS
@@ -18,6 +21,48 @@ function isFresh(timestamp) {
     return Date.now() - new Date(timestamp).getTime() < MAX_PRICE_AGE;
 }
 
+// ===============================
+// SNAPSHOT LOGIC
+// ===============================
+function shouldSnapshot(asset) {
+    const now = Date.now();
+
+    if (!lastSnapshotTime[asset]) {
+        lastSnapshotTime[asset] = 0;
+    }
+
+    return now - lastSnapshotTime[asset] >= SNAPSHOT_INTERVAL;
+}
+
+async function saveSnapshot(asset, price) {
+    await PriceSnapshot.create({
+        asset,
+        price,
+        timestamp: Date.now()
+    });
+
+    lastSnapshotTime[asset] = Date.now();
+}
+
+// ===============================
+// SAVE LATEST PRICE
+// ===============================
+async function saveToMongo(asset, price) {
+    await Price.updateOne(
+        { asset },
+        {
+            $set: {
+                price,
+                updatedAt: Date.now()
+            }
+        },
+        { upsert: true }
+    );
+}
+
+// ===============================
+// COINGECKO
+// ===============================
 async function fetchFromCoinGecko() {
     console.log("🟢 Using CoinGecko...");
 
@@ -36,9 +81,8 @@ async function fetchFromCoinGecko() {
     for (const asset of ASSETS) {
         const price = data?.[asset]?.usd;
 
-        // ❌ IMPORTANT: force fallback if any asset missing
         if (typeof price !== "number") {
-            throw new Error(`${asset} price missing from CoinGecko`);
+            throw new Error(`${asset} price missing`);
         }
 
         priceCache.set(asset, {
@@ -48,30 +92,38 @@ async function fetchFromCoinGecko() {
 
         await saveToMongo(asset, price);
 
+        if (shouldSnapshot(asset)) {
+            await saveSnapshot(asset, price);
+        }
+
         console.log(`🟢 ${asset} → $${price}`);
     }
 
     console.log("🟢 CoinGecko success\n");
-
-    return true; // ✅ REQUIRED for fallback chain
+    return true;
 }
 
+// ===============================
+// BINANCE
+// ===============================
 async function fetchFromBinance() {
     console.log("🟡 Using Binance fallback...");
 
-    for (const asset of ASSETS) {
-        const symbolMap = {
-            bitcoin: "BTCUSDT",
-            ethereum: "ETHUSDT",
-            binancecoin: "BNBUSDT",
-            solana: "SOLUSDT",
-            "avalanche-2": "AVAXUSDT",
-            "shiba-inu": "SHIBUSDT",
-            dogecoin: "DOGEUSDT",
-            pepe: "PEPEUSDT"
-        };
+    const symbolMap = {
+        bitcoin: "BTCUSDT",
+        ethereum: "ETHUSDT",
+        binancecoin: "BNBUSDT",
+        solana: "SOLUSDT",
+        "avalanche-2": "AVAXUSDT",
+        "shiba-inu": "SHIBUSDT",
+        dogecoin: "DOGEUSDT",
+        pepe: "PEPEUSDT"
 
+    };
+
+    for (const asset of ASSETS) {
         const symbol = symbolMap[asset];
+        if (!symbol) continue;
 
         const res = await axios.get(
             `https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`
@@ -87,14 +139,20 @@ async function fetchFromBinance() {
 
             await saveToMongo(asset, price);
 
+            if (shouldSnapshot(asset)) {
+                await saveSnapshot(asset, price);
+            }
+
             console.log(`🟡 ${asset} → $${price}`);
         }
     }
 
-    console.log("🟢 Binance fallback success\n");
+    console.log("🟢 Binance success\n");
 }
 
-
+// ===============================
+// CRYPTOCOMPARE
+// ===============================
 async function fetchFromCryptoCompare() {
     console.log("🔴 Using CryptoCompare fallback...");
 
@@ -104,9 +162,10 @@ async function fetchFromCryptoCompare() {
         binancecoin: "BNB",
         solana: "SOL",
         "avalanche-2": "AVAX",
-         "shiba-inu": "SHIB",
-    dogecoin: "DOGE",
-    pepe: "PEPE"
+        "shiba-inu": "SHIB",
+        dogecoin: "DOGE",
+        pepe: "PEPE",
+        tether: "USDT"
     };
 
     const symbols = Object.values(symbolMap).join(",");
@@ -119,7 +178,6 @@ async function fetchFromCryptoCompare() {
 
     for (const asset of ASSETS) {
         const symbol = symbolMap[asset];
-
         const price = data?.[symbol]?.USD;
 
         if (price) {
@@ -130,6 +188,10 @@ async function fetchFromCryptoCompare() {
 
             await saveToMongo(asset, price);
 
+            if (shouldSnapshot(asset)) {
+                await saveSnapshot(asset, price);
+            }
+
             console.log(`🔴 ${asset} → $${price}`);
         }
     }
@@ -137,6 +199,50 @@ async function fetchFromCryptoCompare() {
     console.log("🟢 CryptoCompare success\n");
 }
 
+
+async function fetchFXRates() {
+    try {
+        const res = await axios.get(
+            "https://open.er-api.com/v6/latest/USD",
+            { timeout: 5000 }
+        );
+
+        const ngnRate = res.data?.rates?.NGN;
+
+        if (!ngnRate) throw new Error("NGN rate missing from FX API");
+
+        priceCache.set("usd_ngn", {
+            price: ngnRate,
+            timestamp: Date.now()
+        });
+
+        await saveToMongo("usd_ngn", ngnRate);
+
+        console.log(`🟢 USD → NGN = ${ngnRate}`);
+
+        return ngnRate;
+    } catch (err) {
+        console.log("⚠️ FX fetch failed:", err.message);
+
+        // fallback (VERY IMPORTANT for production stability)
+        const fallback = 1500;
+
+        priceCache.set("usd_ngn", {
+            price: fallback,
+            timestamp: Date.now()
+        });
+
+        await saveToMongo("usd_ngn", fallback);
+
+        console.log(`🟡 USING FALLBACK USD → NGN = ${fallback}`);
+
+        return fallback;
+    }
+}
+
+// ===============================
+// COINCAP
+// ===============================
 async function fetchFromCoinCap() {
     console.log("🔴 Using CoinCap fallback...");
 
@@ -157,20 +263,24 @@ async function fetchFromCoinCap() {
 
             await saveToMongo(asset, price);
 
+            if (shouldSnapshot(asset)) {
+                await saveSnapshot(asset, price);
+            }
+
             console.log(`🔴 ${asset} → $${price}`);
         }
     }
 
-    console.log("🟢 CoinCap fallback success\n");
+    console.log("🟢 CoinCap success\n");
 }
 
 // ===============================
-// LOAD MONGO CACHE
+// LOAD CACHE
 // ===============================
 async function loadMongoPrices() {
     const prices = await Price.find({});
 
-    console.log(`📦 Loaded ${prices.length} prices from Mongo`);
+    console.log(`📦 Loaded ${prices.length} prices`);
 
     for (const p of prices) {
         priceCache.set(p.asset, {
@@ -181,28 +291,15 @@ async function loadMongoPrices() {
 }
 
 // ===============================
-// SAVE TO MONGO
-// ===============================
-async function saveToMongo(asset, price) {
-    await Price.updateOne(
-        { asset },
-        {
-            $set: {
-                price,
-                updatedAt: Date.now()
-            }
-        },
-        { upsert: true }
-    );
-}
-
-// ===============================
-// FETCH PRICES (ONLY SOURCE)
+// FETCH ORACLE
 // ===============================
 let requestCount = 0;
+
 async function fetchPrices() {
     requestCount++;
     console.log(`📊 API CALL COUNT: ${requestCount}`);
+
+    await fetchFXRates(); // 👈 ADD THIS FIRST
 
     try {
         return await fetchFromCoinGecko();
@@ -222,7 +319,7 @@ async function fetchPrices() {
                 try {
                     return await fetchFromCoinCap();
                 } catch (err4) {
-                    console.log("❌ ALL 4 ORACLES FAILED");
+                    console.log("❌ ALL ORACLES FAILED");
                 }
             }
         }
@@ -235,7 +332,6 @@ async function fetchPrices() {
 function getDelayToNext5Min() {
     const now = new Date();
     const minutes = now.getMinutes();
-    const seconds = now.getSeconds();
 
     const next5 = Math.ceil(minutes / 5) * 5;
 
@@ -251,7 +347,7 @@ async function startOracle() {
     console.log("🚀 Oracle starting...");
 
     await loadMongoPrices();
-    await fetchPrices(); // first snapshot
+    await fetchPrices();
 
     const delay = getDelayToNext5Min();
 
@@ -260,16 +356,14 @@ async function startOracle() {
     setTimeout(() => {
         fetchPrices();
 
-        // now lock into exact 5-min intervals
         setInterval(fetchPrices, 5 * 60 * 1000);
-
     }, delay);
 
     console.log("🟢 Oracle READY");
 }
 
 // ===============================
-// GET PRICE (NO API CALLS HERE)
+// GET PRICE
 // ===============================
 async function getPrice(asset) {
     const cache = priceCache.get(asset);
@@ -280,14 +374,31 @@ async function getPrice(asset) {
 
     const mongo = await Price.findOne({ asset });
 
-    if (mongo) {
-        return mongo.price;
-    }
+    if (mongo) return mongo.price;
 
     return null;
 }
 
+// ===============================
+// 24H CHANGE FUNCTION
+// ===============================
+async function getPriceChange(asset, currentPrice, minutesAgo) {
+    const past = await PriceSnapshot.findOne({
+        asset,
+        timestamp: {
+            $lte: Date.now() - minutesAgo * 60 * 1000
+        }
+    }).sort({ timestamp: -1 });
+
+    if (!past) return 0;
+
+    return Number(
+        (((currentPrice - past.price) / past.price) * 100).toFixed(2)
+    );
+}
+
 module.exports = {
     startOracle,
-    getPrice
+    getPrice,
+    getPriceChange
 };

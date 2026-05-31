@@ -16,6 +16,7 @@ const Stats = require("../models/Stats");
 const { getPrice } = require("../services/price/priceOracle");
 const Conversation = require("../models/conversation");
 const auth = require("../middlewave/auth");
+const sanitizeUser = require("../utils/sanitizeUser");
 
 
 function validateMarketEntryImpact({
@@ -171,10 +172,7 @@ router.post("/user_enter_market", auth, async (req, res) => {
             });
         }
 
-        console.log(req.user)
-        const userId = req.user.id
-
-        console.log(userId)
+        const userId = req.user.id;
 
         if (!userId) {
             return res.status(401).json({
@@ -184,7 +182,7 @@ router.post("/user_enter_market", auth, async (req, res) => {
         }
 
         const [user, market] = await Promise.all([
-            User.findById(userId).select("balance email avaxBalance"),
+            User.findById(userId).select("balances usdBalance lockedUsd email"),
             Market.findById(marketId)
         ]);
 
@@ -195,6 +193,9 @@ router.post("/user_enter_market", auth, async (req, res) => {
             });
         }
 
+        // ======================
+        // WHITELIST CHECK
+        // ======================
         const WHITELISTED_EMAILS = [
             "admin@example.com",
             "derik0x0x@gmail.com",
@@ -216,8 +217,9 @@ router.post("/user_enter_market", auth, async (req, res) => {
             });
         }
 
-
-
+        // ======================
+        // PRICE
+        // ======================
         const avaxPrice = await getPrice("avalanche-2");
 
         if (!avaxPrice) {
@@ -226,21 +228,50 @@ router.post("/user_enter_market", auth, async (req, res) => {
             });
         }
 
+        const roundTo2 = (n) => Math.floor(n * 100) / 100;
+
         const avaxAmount = Number(amount);
         const usdAmount = avaxAmount * avaxPrice;
 
         const fee = usdAmount * 0.05;
         const netUsd = usdAmount - fee;
 
-        const roundTo2 = (num) => Math.floor(num * 100) / 100;
+        if (netUsd <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid trade amount"
+            });
+        }
+
+        // ======================
+        // BALANCE CHECK (ONLY AVAX MATTERS)
+        // ======================
+        const userAvaxBalance = user.balances?.AVAX ?? 0;
+
+        if (userAvaxBalance < avaxAmount) {
+            return res.status(400).json({
+                success: false,
+                message: "Insufficient AVAX balance"
+            });
+        }
 
         const subMarket = market.subMarkets.id(subMarketId);
 
+        if (!subMarket) {
+            return res.status(404).json({
+                success: false,
+                message: "Sub-market not found"
+            });
+        }
+
+        // ======================
+        // VALIDATION
+        // ======================
         const validation = validateMarketEntryImpact({
             subMarket,
             outcomeLabel: outcome,
             incomingAmount: netUsd,
-            maxImbalancePercent: 60 // tweak this (50–80 is realistic)
+            maxImbalancePercent: 60
         });
 
         if (!validation.allowed) {
@@ -251,43 +282,38 @@ router.post("/user_enter_market", auth, async (req, res) => {
                 debug: validation.debug
             });
         }
-        if (netUsd <= 0) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid trade amount"
-            });
-        }
-
-        if (user.balance.testnet < usdAmount) {
-            return res.status(400).json({
-                success: false,
-                message: "Insufficient balance"
-            });
-        }
-
-
-        if (!subMarket) {
-            return res.status(404).json({
-                success: false,
-                message: "Sub-market not found"
-            });
-        }
 
         // ======================
-        // BALANCE UPDATE (FIXED)
+        // UPDATE USER (CLEAN LEDGER ONLY)
         // ======================
-        user.balance.testnet -= usdAmount;
-        user.balance.locked += netUsd;
 
-        user.avaxBalance = roundTo2(user.avaxBalance - avaxAmount);
+        const newAvaxBalance = roundTo2(user.balances.AVAX - avaxAmount);
 
-        // stats
+        await User.updateOne(
+            { _id: userId },
+            {
+                $set: {
+                    "balances.AVAX": newAvaxBalance,
+                    lastBalanceUpdate: Date.now()
+                },
+                $inc: {
+                    lockedUsd: netUsd
+                }
+            }
+        );
+
+        // ======================
+        // STATS
+        // ======================
         let stats = await Stats.findOne();
         if (!stats) stats = await Stats.create({});
+
         stats.totalFees += fee;
         await stats.save();
 
-        // outcome logic
+        // ======================
+        // OUTCOME UPDATE
+        // ======================
         const selectedOutcome = subMarket.outcomes.find(
             o => o.label.toLowerCase() === outcome.toLowerCase()
         );
@@ -305,6 +331,7 @@ router.post("/user_enter_market", auth, async (req, res) => {
         selectedOutcome.liquidity += netUsd;
 
         const totalPool = subMarket.outcomes.reduce((a, o) => a + o.pool, 0);
+
         const MIN_PERCENT = 20;
 
         let raw = subMarket.outcomes.map(o =>
@@ -312,10 +339,12 @@ router.post("/user_enter_market", auth, async (req, res) => {
         );
 
         let adjusted = raw.map(p => Math.max(p, MIN_PERCENT));
+
         let sum = adjusted.reduce((a, b) => a + b, 0);
 
         if (sum > 100) {
             const excess = sum - 100;
+
             const flexibleIndexes = adjusted
                 .map((p, i) => (p > MIN_PERCENT ? i : -1))
                 .filter(i => i !== -1);
@@ -329,6 +358,7 @@ router.post("/user_enter_market", auth, async (req, res) => {
         }
 
         const finalSum = adjusted.reduce((a, b) => a + b, 0);
+
         adjusted = adjusted.map(p => (p / finalSum) * 100);
 
         subMarket.outcomes.forEach((o, i) => {
@@ -341,31 +371,25 @@ router.post("/user_enter_market", auth, async (req, res) => {
         market.tradeCount += 1;
         market.totalVolume += netUsd;
 
+        await market.save();
+
+        // ======================
+        // POSITION
+        // ======================
         const position = await Position.create({
             userId,
             marketId,
             subMarketId,
             outcome,
-            amount: Number(netUsd.toFixed(2)), // ✅ USD AFTER FEE
-            fee: Number(fee.toFixed(2)),       // ✅ optional but smart
-            grossAmount: Number(usdAmount.toFixed(2)) // ✅ optional (before fee)
+            amount: Number(netUsd.toFixed(2)),
+            fee: Number(fee.toFixed(2)),
+            grossAmount: Number(usdAmount.toFixed(2))
         });
 
-        await market.save();
-
-        await User.updateOne(
-            { _id: user._id },
-            {
-                $set: {
-                    "balance.testnet": roundTo2(user.balance.testnet),
-                    "balance.locked": roundTo2(user.balance.locked),
-                    avaxBalance: roundTo2(user.avaxBalance),
-                    lastBalanceUpdate: Date.now()
-                }
-            }
-        );
-
-        const safeUser = await User.findById(userId).select("-password");
+        // ======================
+        // RESPONSE
+        // ======================
+        const updatedUser = await User.findById(userId).select("balances usdBalance lockedUsd email");
 
         return res.json({
             success: true,
@@ -375,8 +399,8 @@ router.post("/user_enter_market", auth, async (req, res) => {
                 amount: avaxAmount,
                 fee: Number(fee.toFixed(2)),
                 netAmount: Number(netUsd.toFixed(2)),
-                balance: safeUser.balance,
-                user: safeUser
+                balance: updatedUser.balances,
+                user: sanitizeUser(updatedUser)
             }
         });
 
@@ -703,7 +727,7 @@ router.post("/user_market_creaiton", auth, async (req, res) => {
             (a) => a.user?.toString() === userId.toString()
         );
         // ✅ EMAIL WHITELIST
-        const allowedEmails = ["derik0x0x@gmail.com","ositanwaubani@gmail.com"];
+        const allowedEmails = ["derik0x0x@gmail.com", "ositanwaubani@gmail.com"];
 
 
         const isWhitelistedEmail = allowedEmails.includes(user?.email);

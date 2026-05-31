@@ -206,7 +206,12 @@ async function generateMarkets({ durationMinutes }) {
     } else if (durationMinutes === 720) {
       cycleTimes = get12hCycleTimes();
 
-    } else {
+    }
+    else if (durationMinutes === 5) {
+      cycleTimes = get5mCycleTimes();
+
+    }
+    else {
       throw new Error(`Unsupported duration: ${durationMinutes}`);
     }
 
@@ -240,6 +245,9 @@ async function generateMarkets({ durationMinutes }) {
         } else if (durationMinutes === 720) {
           percentMove = Math.random() * 0.25 + 0.10;
         }
+        else if (durationMinutes === 5) {
+          percentMove = Math.random() * 0.02 + 0.005;
+        } 
       }
 
       const targetPriceRaw =

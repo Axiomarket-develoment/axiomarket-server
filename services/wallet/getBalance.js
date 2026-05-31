@@ -1,17 +1,29 @@
 const { ethers } = require("ethers");
 
-const AVAX_RPC = "https://api.avax.network/ext/bc/C/rpc"; // Avalanche C-Chain RPC
-const provider = new ethers.JsonRpcProvider(AVAX_RPC);
+// ---------------- PROVIDERS ----------------
+const providers = {
+  AVAX: new ethers.JsonRpcProvider("https://api.avax.network/ext/bc/C/rpc"),
+  ETH: new ethers.JsonRpcProvider("https://mainnet.infura.io/v3/yy"),
+  BSC: new ethers.JsonRpcProvider("https://bsc-dataseed.binance.org")
+};
 
-async function getBalance(address) {
+// ---------------- NATIVE BALANCE ----------------
+async function getNativeBalance(chain, address) {
   try {
-    const balance = await provider.getBalance(address); // returns balance in wei
-    const balanceInAVAX = ethers.formatEther(balance);  // convert to AVAX
-    console.log(`Wallet ${address} has ${balanceInAVAX} AVAX`);
-    return balanceInAVAX;
+    const provider = providers[chain];
+
+    if (!provider) throw new Error("Unsupported chain");
+
+    const balance = await provider.getBalance(address);
+
+    const formatted = ethers.formatEther(balance);
+
+    console.log(`${chain} Wallet ${address} = ${formatted}`);
+
+    return formatted;
   } catch (err) {
-    console.error("❌ Failed to fetch balance:", err.message);
-    throw err;
+    console.error(`${chain} error:`, err.message);
+    return null;
   }
 }
 
@@ -19,5 +31,5 @@ async function getBalance(address) {
 
 
 // Example usage
-getBalance("0x0715ad5d3f230BdB565ed02a1F5A179476035c05");
-getBalance("0xd4707339275048e4Df1DDA0755C61eEC9a0FE4D5");
+getNativeBalance("AVAX", "0x240c36457D6b6B39b06A2A7d462804fA212Eb675");
+// getNativeBalance("ETH", "0xd4707339275048e4Df1DDA0755C61eEC9a0FE4D5");

@@ -7,7 +7,11 @@ const UserSchema = new mongoose.Schema({
   password:             { type: String },
   wallet:                {
                            address: { type: String },
-                           privateKey: { type: String } // store securely (consider encryption!)
+                           privateKey: { 
+                                           encryptedData: String,
+                                           iv: String,
+                                           authTag: String
+                                        } // store securely (consider encryption!)
                          },
   
   // viirtual balnce
@@ -27,10 +31,33 @@ const UserSchema = new mongoose.Schema({
 
   isAdmin:              {type: Boolean},
 
-  avaxBalance:          { type: Number, default: 0 },
   usdBalance:           { type: Number, default: 0 },
+  lockedUsd:            { type: Number, default: 0 },
   lastBalanceUpdate:    { type: Number },
   lastLogin:            { type: Number },
+
+  balances:             {
+                            AVAX:  { type: Number, default: 0 },
+                            ETH:   { type: Number, default: 0 },
+                            BNB:   { type: Number, default: 0 },
+                            USDT:  { type: Number, default: 0 },
+                         },
+  onChainBalances:             {
+                            AVAX:  { type: Number, default: 0 },
+                            ETH:   { type: Number, default: 0 },
+                            BNB:   { type: Number, default: 0 },
+                            USDT:  { type: Number, default: 0 },
+                         },
+  lastSwept:             {
+                            AVAX:  { type: Number, default: 0 },
+                            ETH:   { type: Number, default: 0 },
+                            BNB:   { type: Number, default: 0 },
+                            USDT:  { type: Number, default: 0 },
+                         },
+
+  fiat:                    {
+                            NGN: { type: Number, default: 0 }
+                         },
 
 
 

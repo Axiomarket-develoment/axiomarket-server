@@ -3,178 +3,201 @@ const Position = require("../../models/Position");
 const User = require("../../models/User");
 const calcUserBalance = require("../balance/calcUserBalance");
 const { getIO } = require("../../websocket");
+const { getPrice } = require("../price/priceOracle");
 
-function round2(n) {
-    return Math.floor(n * 100) / 100;
+function round2(num) {
+    return Math.floor(num * 100) / 100;
 }
 
+// ====================================
+// SYNC USER UI BALANCE
+// ====================================
 
-async function syncUserBalance(user, options = {}) {
-    if (!user?._id) return;
 
-    try {
-        const computed = await calcUserBalance(user, options);
-
-        const updatePayload = {
-            avaxBalance: computed.avaxBalance,
-            lastBalanceUpdate: computed.lastBalanceUpdate,
-        };
-
-        await User.updateOne(
-            { _id: user._id },
-            { $set: updatePayload }
-        );
-
-        console.log(`🔄 Synced balance → User: ${user._id}`);
-
-        return computed;
-
-    } catch (err) {
-        console.log("❌ syncUserBalance error:", err.message);
-    }
-}
-
+// ====================================
+// MARKET SETTLEMENT
+// ====================================
 async function settleMarket(market, winningOutcomeLabel) {
-    if (!market || !["ENDED", "SETTLING"].includes(market.status)) {
+
+    if (!market) return;
+
+    if (!["ENDED", "SETTLING"].includes(market.status)) {
         console.log("⏭ Market not ready for settlement");
         return;
     }
 
-    const updatedUsers = new Set();
     if (!winningOutcomeLabel) {
-        console.log("❌ No winning outcome provided");
+        console.log("❌ Missing winning outcome");
         return;
     }
 
     market.result = winningOutcomeLabel.toUpperCase();
 
-    console.log(`\n🚀 START SETTLEMENT`);
-    console.log(`Market ID: ${market._id}`);
-    console.log(`Question: ${market.question}`);
-    console.log(`🏁 Winning Outcome: ${market.result}`);
-    console.log(`==============================\n`);
+    console.log("\n==================================");
+    console.log("🚀 STARTING MARKET SETTLEMENT");
+    console.log(`Market: ${market._id}`);
+    console.log(`Winner: ${market.result}`);
+    console.log("==================================\n");
 
-    for (const sub of market.subMarkets) {
+    const updatedUsers = new Set();
 
-        console.log(`--- SUB MARKET ---`);
-        console.log(`SubMarket ID: ${sub._id}`);
+    for (const subMarket of market.subMarkets) {
 
-        let totalWinningPool = 0;
-        let totalLosingPool = 0;
+        console.log(`\n📊 Submarket ${subMarket._id}`);
 
-        sub.outcomes.forEach(o => {
-            o.pool = round2(o.pool);
+        let winningPool = 0;
+        let losingPool = 0;
 
-            console.log(`Outcome: ${o.label} | Pool: ${o.pool}`);
+        for (const outcome of subMarket.outcomes) {
 
-            if (o.label.toUpperCase() === market.result) {
-                totalWinningPool += o.pool;
+            outcome.pool = round2(outcome.pool);
+
+            if (
+                outcome.label.toUpperCase() === market.result
+            ) {
+                winningPool += outcome.pool;
             } else {
-                totalLosingPool += o.pool;
+                losingPool += outcome.pool;
             }
-        });
+        }
 
-        console.log(`💰 Total Winning Pool: ${totalWinningPool}`);
-        console.log(`💸 Total Losing Pool: ${totalLosingPool}`);
+        winningPool = round2(winningPool);
+        losingPool = round2(losingPool);
 
-        sub.status = "SETTLED";
+        console.log(`Winning Pool: ${winningPool}`);
+        console.log(`Losing Pool: ${losingPool}`);
 
         const positions = await Position.find({
             marketId: market._id,
-            subMarketId: sub._id
+            subMarketId: subMarket._id
         });
 
-        console.log(`👥 Positions Found: ${positions.length}`);
+        console.log(`Positions Found: ${positions.length}`);
 
         for (const position of positions) {
+
             const user = await User.findById(position.userId);
-            if (!user) {
-                console.log(`⚠️ User not found for position ${position._id}`);
-                continue;
-            }
+
+            if (!user) continue;
 
             updatedUsers.add(user._id.toString());
 
-            const amount = round2(position.amount);
-            const outcome = position.outcome.toUpperCase();
+            const stake = round2(position.amount);
 
-            console.log(`\n➡️ Processing Position`);
-            console.log(`User: ${user._id}`);
-            console.log(`Bet: ${amount} on ${outcome}`);
+            const userOutcome =
+                position.outcome.toUpperCase();
 
+            console.log(
+                `User ${user._id} | Stake ${stake}`
+            );
 
+            // ====================================
+            // UNLOCK FUNDS
+            // ====================================
 
-
-            // 🔓 Unlock funds
-            user.balance.locked = Math.max(
-                0,
-                round2(user.balance.locked - amount)
+            user.lockedUsd = round2(
+                Math.max(
+                    0,
+                    (user.lockedUsd || 0) - stake
+                )
             );
 
             let payout = 0;
 
-            if (outcome === market.result) {
+            // ====================================
+            // WINNER
+            // ====================================
+
+            if (userOutcome === market.result) {
+
                 const share =
-                    totalWinningPool > 0 ? amount / totalWinningPool : 0;
+                    winningPool > 0
+                        ? stake / winningPool
+                        : 0;
 
-                payout = amount + share * totalLosingPool;
-                payout = round2(payout);
+                const payoutUsd = round2(stake + (share * losingPool));
 
-                console.log(`✅ WINNER`);
-                console.log(`Share: ${share}`);
-                console.log(`Payout: ${payout}`);
+                const avaxPrice = await getPrice("avalanche-2");
 
-                user.balance.testnet = round2(
-                    user.balance.testnet + payout
+                const avaxPayout = avaxPrice
+                    ? payoutUsd / avaxPrice
+                    : 0;
+
+                // 1. give real asset (AVAX)
+                user.balances.AVAX = round2(
+                    (user.balances.AVAX || 0) + avaxPayout
                 );
+
+                // 2. update PnL tracking
+                user.usdBalance = round2(
+                    (user.usdBalance || 0) + (payoutUsd - stake)
+                );
+
+                console.log(`✅ WINNER | payout ${payoutUsd}`);
             } else {
-                console.log(`❌ LOSER`);
+
+                user.usdBalance = round2(
+                    (user.usdBalance || 0) - stake
+                );
+
+                console.log(`❌ LOSER | lost ${stake}`);
             }
 
             await user.save();
-
-            console.log(`💼 Updated Balance → Testnet: ${user.balance.testnet}, Locked: ${user.balance.locked}`);
-
-
         }
 
+        subMarket.status = "SETTLED";
 
-        // after ALL positions processed
+        subMarket.outcomes = subMarket.outcomes.map(
+            outcome => ({
+                label: outcome.label,
+                result:
+                    outcome.label.toUpperCase() ===
+                    market.result,
+                odds: outcome.odds,
+                pool: outcome.pool,
+                liquidity: outcome.liquidity,
+                volume: outcome.volume,
+                count: outcome.count
+            })
+        );
+    }
 
-        const io = getIO();
+    // ====================================
+    // RECALCULATE USER UI BALANCES
+    // ====================================
 
-        for (const userId of updatedUsers) {
-            const freshUser = await User.findById(userId);
+    const io = getIO();
 
-            const updated = await syncUserBalance(freshUser, {
-                provider: "settlement"
-            });
+    for (const userId of updatedUsers) {
 
-            io.to(userId.toString()).emit("balance-update", {
-                testnet: updated.balance?.testnet ?? freshUser.balance.testnet,
-                locked: updated.balance?.locked ?? freshUser.balance.locked,
-                avaxBalance: updated.avaxBalance ?? freshUser.avaxBalance
-            });
-        }
+        const freshUser = await User.findById(userId);
 
-        sub.outcomes = sub.outcomes.map(o => ({
-            label: o.label,
-            result: o.label.toUpperCase() === market.result,
-            odds: o.odds,
-            pool: o.pool,
-            liquidity: o.liquidity,
-            volume: o.volume,
-            count: o.count
-        }));
+        if (!freshUser) continue;
 
-        console.log(`✅ Submarket settled\n`);
+        io.to(userId.toString()).emit(
+            "balance-update",
+            {
+                balances: freshUser.balances,
+                usdBalance: freshUser.usdBalance,
+                lockedUsd: freshUser.lockedUsd
+            }
+        );
+
+        console.log(
+            `🔄 Updated user ${userId}`
+        );
     }
 
     market.status = "SETTLED";
+
     await market.save();
 
-    console.log(`🎯 MARKET FULLY SETTLED`);
-    console.log(`====================================\n`);
+    console.log("\n==================================");
+    console.log("🎯 MARKET SETTLED SUCCESSFULLY");
+    console.log("==================================\n");
 }
 
-module.exports = { settleMarket };
+module.exports = {
+    settleMarket
+};

@@ -17,11 +17,15 @@ const User = require("./models/User");
 
 const { startOracle } = require("./services/price/priceOracle");
 const { startEngine } = require("./crons/mastercron");
-
+const startWatchers = require("./services/blockchain/watcher");
+const initializeAdminWallets = require("./services/wallet/adminwallet");
+const { sweepDeposits } = require("./crons/sweepFees");
+const providers = require("./services/blockchain/providers");
+const startBalanceUpdater = require("./services/blockchain/balanceUpdater");
 
 // ---------------- DNS Config ----------------
-// dnsPromises.setServers(["1.1.1.1", "8.8.8.8"]);
-// dns.setDefaultResultOrder("ipv4first");
+dnsPromises.setServers(["1.1.1.1", "8.8.8.8"]);
+dns.setDefaultResultOrder("ipv4first");
 
 // ---------------- Express Init ----------------
 const app = express();
@@ -88,10 +92,21 @@ mongoose
 
     console.log("🟢 Oracle initialized");
 
+    // await initializeAdminWallets();
+
     // await deleteEmptyMarketsOnBoot()
+    // await normalizeWalletAddresses()
 
     // 🔥 Start master engine
     startEngine();
+
+    // startBalanceUpdater()
+    setInterval(() => {
+      sweepDeposits();
+    }, 2 * 60 * 1000);
+    // startWatchers(providers);
+
+    // await fixOldWalletFormats()
 
     console.log("🟢 Engine started");
   })
@@ -281,26 +296,110 @@ async function deleteEmptyMarketsOnBoot() {
   }
 }
 
+async function normalizeWalletAddresses() {
+  try {
+    console.log("Starting wallet normalization...");
+
+    const users = await User.find({});
+
+    let updated = 0;
+
+    for (const user of users) {
+
+      if (!user.wallet?.address) continue;
+
+      const lower = user.wallet.address.toLowerCase();
+
+      if (user.wallet.address !== lower) {
+
+        user.wallet.address = lower;
+        await user.save();
+
+        updated++;
+        console.log(`Updated: ${user.email} → ${lower}`);
+      }
+    }
+
+    console.log(`Done. Total updated: ${updated}`);
+
+    process.exit(0);
+
+  } catch (err) {
+    console.error("Normalization error:", err);
+    process.exit(1);
+  }
+}
+
+async function fixOldWalletFormats() {
+  try {
+    console.log("🧹 Running wallet migration check...");
+
+    const users = await User.find({});
+    let fixed = 0;
+    let broken = 0;
+
+    for (const user of users) {
+      let pk = user.wallet?.privateKey;
+
+      if (!pk) continue;
+
+      try {
+        let parsed = pk;
+
+        // STEP 1: first parse attempt
+        if (typeof parsed === "string") {
+          try {
+            parsed = JSON.parse(parsed);
+          } catch (e1) {
+            // try cleaning broken escape characters
+            parsed = JSON.parse(parsed.replace(/\\"/g, '"'));
+          }
+        }
+
+        // STEP 2: second parse (double stringified case)
+        if (typeof parsed === "string") {
+          parsed = JSON.parse(parsed);
+        }
+
+        // STEP 3: validation
+        if (!parsed?.encryptedData || !parsed?.iv || !parsed?.authTag) {
+          throw new Error("Invalid wallet structure");
+        }
+
+        user.wallet.privateKey = parsed;
+        await user.save();
+
+        fixed++;
+        console.log(`✅ Fixed wallet: ${user.email}`);
+
+      } catch (err) {
+        broken++;
+        console.log(`❌ Cannot repair wallet: ${user.email}`);
+      }
+    }
+
+    console.log("🧾 Wallet migration complete");
+    console.log(`✔ Fixed: ${fixed}`);
+    console.log(`⚠️ Broken: ${broken}`);
+
+  } catch (err) {
+    console.log("❌ Migration error:", err.message);
+  }
+}
+
 // ---------------- Routes ----------------
 app.use("/user_auth", require("./routes/auth"));
-
 app.use("/user_market", require("./routes/markets"));
-
 app.use("/user_chat", require("./routes/chat"));
-
 app.use("/user_waitlist", require("./routes/waitlist"));
-
 app.use("/user_history", require("./routes/history"));
-
 app.use("/ai", require("./routes/ai"));
-
 app.use("/user_ambassador", require("./routes/ambassador"));
-
 app.use("/user_kol", require("./routes/kol"));
-
 app.use("/user_match", require("./routes/match"));
-
 app.use("/user_player", require("./routes/player"));
+app.use("/user_wallet", require("./routes/wallet"));
+app.use("/user_price", require("./routes/price"))
 
 
 app.use("/admin_auth", require("./routes/admin/auth"))

@@ -12,6 +12,7 @@ const calcUserBalance = require("../services/balance/calcUserBalance");
 const JWT_SECRET = process.env.JWT_SECRET;
 
 const setAuthCookie = require("../utils/setAuthCookie");
+const sanitizeUser = require("../utils/sanitizeUser");
 
 // ==========================
 // 🔥 SYNC USER BALANCE
@@ -69,7 +70,7 @@ router.post("/google", async (req, res) => {
                 username,
                 authProvider: "google",
                 balance: {
-                    testnet: 100,
+                    testnet: 0,
                     locked: 0
                 },
                 wallet: {
@@ -100,13 +101,13 @@ router.post("/google", async (req, res) => {
             }
         );
 
-        console.log(token)
+        // console.log(token)
         // 🔥 Set HttpOnly cookie
         setAuthCookie(res, token);
 
         res.json({
             success: true,
-            user: freshUser
+           user: sanitizeUser(freshUser)
         });
 
     } catch (err) {
@@ -141,7 +142,7 @@ router.post("/signup", async (req, res) => {
             username,
             authProvider: "email",
             balance: {
-                testnet: 100,
+                testnet: 0,
                 locked: 0
             }
         });
@@ -168,7 +169,7 @@ router.post("/signup", async (req, res) => {
 
         res.json({
             success: true,
-            user
+            user:sanitizeUser(user)
         });
 
     } catch (err) {
@@ -239,7 +240,7 @@ router.post("/login", async (req, res) => {
 
         res.json({
             success: true,
-            user,
+            user: sanitizeUser(user),
             debug: {
                 telegramConnected: user.telegram?.connected,
                 walletConnected: user.wallet?.connected,
@@ -284,7 +285,7 @@ router.get("/me", async (req, res) => {
 
         res.json({
             success: true,
-            user
+            user: sanitizeUser(user)
         });
 
     } catch (err) {
