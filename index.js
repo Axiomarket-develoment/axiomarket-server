@@ -411,33 +411,6 @@ app.get("/", (req, res) => {
 });
 
 
-
-// app.get("/test-cookie", (req, res) => {
-//   res.cookie("test_token", "123456", {
-//     httpOnly: true,
-//     secure: true,
-//     sameSite: "none",
-//   });
-
-//   res.json({
-//     success: true,
-//     message: "Cookie set",
-//   });
-// });
-
-// app.get("/debug-cookie", (req, res) => {
-//   console.log("COOKIES:", req.cookies);
-
-//   res.json({
-//     cookies: req.cookies,
-//     hasToken: !!req.cookies.token
-//   });
-// });
-
-
-
-
-
 // ---------------- Start Server ----------------
 httpServer.listen(PORT, () => {
   console.log(
