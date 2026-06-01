@@ -210,12 +210,12 @@ router.post("/user_enter_market", auth, async (req, res) => {
             user.email.toLowerCase()
         );
 
-        if (!isAmbassador && !isWhitelisted) {
-            return res.status(403).json({
-                success: false,
-                message: "Access denied: ambassadors only"
-            });
-        }
+        // if (!isAmbassador && !isWhitelisted) {
+        //     return res.status(403).json({
+        //         success: false,
+        //         message: "Access denied: ambassadors only"
+        //     });
+        // }
 
         // ======================
         // PRICE
