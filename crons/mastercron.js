@@ -19,7 +19,7 @@ async function mainCycle() {
 
     // 2. CREATE MARKETS
     await generateMarkets({ durationMinutes: 15 });
-    await generateMarkets({ durationMinutes: 5 });
+    // await generateMarkets({ durationMinutes: 5 });
 
     await generateMarkets({ durationMinutes: 60 });
 
