@@ -100,7 +100,7 @@ mongoose
     // await deleteNonFifaMatches()
 
     // 🔥 Start master engine
-    startEngine();
+    // startEngine();
 
     // startBalanceUpdater()
     setInterval(() => {

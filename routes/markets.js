@@ -1026,6 +1026,21 @@ router.post("/system_market_creation", async (req, res) => {
             marketPayload.matchStartTime = startDate;
         }
 
+        if (category === "Politics") {
+            marketPayload.metadata = {
+                electionName: values.electionName || "",
+                country: values.country || "Nigeria",
+            };
+
+            marketPayload.event = {
+                name: values.electionName || "",
+                participants: values.participants || [],
+                participantImages: values.participantImages || [],
+                league: values.country || "Politics",
+                startTime: startDate
+            };
+        }
+
         // -----------------------------------
         // CREATE MARKET
         // -----------------------------------
