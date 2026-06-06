@@ -69,12 +69,13 @@ const MarketSchema = new mongoose.Schema({
 
   marketMode:            {
                             type: String,
-                            enum: [
-                                "FOOTBALL_PLAYER",
-                                "FOOTBALL_TEAM",
-                                "FOOTBALL_MATCH",
-                                "FOOTBALL_OUTCOME"
-                              ]
+                            // enum: [
+                            //     "FOOTBALL_PLAYER",
+                            //     "FOOTBALL_TEAM",
+                            //     "FOOTBALL_MATCH",
+                            //     "FOOTBALL_OUTCOME",
+                            //     "SPECIAL_OUTCOME_CUP_WINNER"
+                            //   ]
                          },
   result:                { type: String,  default: null },
   createdAt:             { type: Date, default: Date.now },

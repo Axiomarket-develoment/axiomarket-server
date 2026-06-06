@@ -71,7 +71,9 @@ router.post("/create_matches", async (req, res) => {
 
 router.get("/get_matches", async (req, res) => {
     try {
-        const matches = await Match.find().sort({ startTime: 1 });
+        const matches = await Match.find({
+            league: "FIFA World Cup 2026"
+        }).sort({ startTime: 1 });
 
         return res.status(200).json({
             success: true,

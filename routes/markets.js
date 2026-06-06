@@ -160,6 +160,40 @@ router.get("/markets", async (req, res) => {
     }
 });
 
+router.get("/market/:id", async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        if (!id) {
+            return res.status(400).json({
+                success: false,
+                message: "Market ID is required",
+            });
+        }
+
+        const market = await Market.findById(id);
+
+        if (!market) {
+            return res.status(404).json({
+                success: false,
+                message: "Market not found",
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            data: market,
+        });
+
+    } catch (error) {
+        console.error("GET /market/:id error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Server error while fetching market",
+        });
+    }
+});
 
 router.post("/user_enter_market", auth, async (req, res) => {
     try {
@@ -852,6 +886,168 @@ router.post("/user_market_creaiton", auth, async (req, res) => {
         return res.status(201).json({
             success: true,
             message: "Market created successfully",
+            market,
+            conversation
+        });
+
+    } catch (error) {
+        console.log(error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error",
+            error: error.message
+        });
+    }
+});
+
+
+router.post("/system_market_creation", async (req, res) => {
+    try {
+        const {
+            category,
+            values,
+            startDate,
+            endDate,
+            outcomes,
+            durationMinutes,
+            question,
+            marketType,
+            marketMode
+        } = req.body;
+
+        // -----------------------------------
+        // VALIDATION
+        // -----------------------------------
+
+        if (!question) {
+            return res.status(400).json({
+                success: false,
+                message: "Question is required"
+            });
+        }
+
+        if (!startDate || !endDate) {
+            return res.status(400).json({
+                success: false,
+                message: "Start date and end date required"
+            });
+        }
+
+        if (!outcomes || outcomes.length < 2) {
+            return res.status(400).json({
+                success: false,
+                message: "At least 2 outcomes required"
+            });
+        }
+
+        const outcomeCount = outcomes.length;
+        const basePercentage = Math.round(100 / outcomeCount);
+
+        const finalMarketType =
+            MARKET_TYPE_MAP[category] || marketType || "CRYPTO";
+
+        // -----------------------------------
+        // MARKET PAYLOAD
+        // -----------------------------------
+
+        const marketPayload = {
+            createdBy: null,
+            question,
+            marketType: finalMarketType,
+            startDate,
+            endDate,
+            marketMode,
+            durationMinutes,
+            category,
+            totalVolume: 0,
+            tradeCount: 0,
+            featured: false,
+            processing: false,
+            status: "LIVE",
+
+            subMarkets: [
+                {
+                    question,
+                    marketType: finalMarketType,
+                    totalVolume: 0,
+                    tradeCount: 0,
+                    status: "LIVE",
+                    outcomes: outcomes.map((o) => ({
+                        label: o.label,
+                        result: null,
+                        odds: o.odds || 2.0,
+                        liquidity: o.liquidity || 0,
+                        volume: o.volume || 0,
+                        count: o.count || 0,
+                        pool: o.pool || 0,
+                        percentage: basePercentage
+                    }))
+                }
+            ]
+        };
+
+        // -----------------------------------
+        // CATEGORY LOGIC
+        // -----------------------------------
+
+        if (category === "Crypto" || category === "Meme Coins") {
+            marketPayload.metadata = {
+                asset: values.assetSymbol,
+                assetSymbol: values.assetSymbol,
+                targetPrice: Number(values.target),
+                direction: question.toLowerCase().includes("above")
+                    ? "ABOVE"
+                    : "BELOW",
+                startPrice: Number(values.startPrice || 0),
+                assetLogo: values.assetLogo || "",
+                chartImage: values.chartImage || ""
+            };
+        }
+
+        if (category === "X") {
+            const username = values.name?.replace("@", "");
+            marketPayload.metadata = {
+                asset: values.name,
+                username,
+                profileImage: `https://unavatar.io/twitter/${username}`
+            };
+        }
+
+        if (category === "Football") {
+            marketPayload.event = {
+                name: values.matchName || "",
+                participants: values.participants || [],
+                participantImages: values.participantImages || values.playerImage || [],
+                league: values.league || "",
+                startTime: startDate
+            };
+
+            marketPayload.matchStartTime = startDate;
+        }
+
+        // -----------------------------------
+        // CREATE MARKET
+        // -----------------------------------
+
+        const market = await Market.create(marketPayload);
+
+        const conversation = await Conversation.create({
+            marketId: market._id,
+            participants: [],
+            messages: []
+        });
+
+        market.conversationId = conversation._id;
+        await market.save();
+
+        // -----------------------------------
+        // RESPONSE
+        // -----------------------------------
+
+        return res.status(201).json({
+            success: true,
+            message: "Market created successfully (system)",
             market,
             conversation
         });

@@ -22,6 +22,7 @@ const initializeAdminWallets = require("./services/wallet/adminwallet");
 const { sweepDeposits } = require("./crons/sweepFees");
 const providers = require("./services/blockchain/providers");
 const startBalanceUpdater = require("./services/blockchain/balanceUpdater");
+const Match = require("./models/Match");
 
 // ---------------- DNS Config ----------------
 dnsPromises.setServers(["1.1.1.1", "8.8.8.8"]);
@@ -96,6 +97,7 @@ mongoose
 
     // await deleteEmptyMarketsOnBoot()
     // await normalizeWalletAddresses()
+    // await deleteNonFifaMatches()
 
     // 🔥 Start master engine
     startEngine();
@@ -386,6 +388,28 @@ async function fixOldWalletFormats() {
     console.log("❌ Migration error:", err.message);
   }
 }
+
+async function deleteNonFifaMatches() {
+  try {
+    const result = await Match.deleteMany({
+      league: { $ne: "FIFA World Cup 2026" }
+    });
+
+    console.log(`Deleted ${result.deletedCount} non-FIFA matches`);
+
+    return {
+      success: true,
+      deletedCount: result.deletedCount
+    };
+
+  } catch (error) {
+    console.error("Error deleting non-FIFA matches:", error);
+    return {
+      success: false,
+      message: error.message
+    };
+  }
+};
 
 // ---------------- Routes ----------------
 app.use("/user_auth", require("./routes/auth"));
