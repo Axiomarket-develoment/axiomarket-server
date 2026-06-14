@@ -757,16 +757,17 @@ router.post("/user_market_creaiton", auth, async (req, res) => {
         // AMBASSADOR CHECK (LOOP VERSION)
         // -----------------------------------
 
-        const ambassadors = await Ambassador.find({});
-        const kols = await Kol.find({});
+   
+        const ambassador = await Ambassador.findOne({
+            email: user.email
+        });
 
-        const isAmbassador = ambassadors.some(
-            (a) => a.user?.toString() === userId.toString()
-        );
+        const kol = await Kol.findOne({
+            email: user.email
+        });
 
-        const isKol = kols.some(
-            (k) => k.user?.toString() === userId.toString()
-        );
+        const isAmbassador = !!ambassador;
+        const isKol = !!kol;
 
         // ✅ EMAIL WHITELIST
         const allowedEmails = ["derik0x0x@gmail.com", "ositanwaubani@gmail.com"];
