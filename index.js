@@ -92,23 +92,13 @@ mongoose
     await startOracle();
 
     console.log("🟢 Oracle initialized");
-
-    // await initializeAdminWallets();
-
-    // await deleteEmptyMarketsOnBoot()
-    // await normalizeWalletAddresses()
-    // await deleteNonFifaMatches()
-
     // 🔥 Start master engine
-    // startEngine();
+    startEngine();
 
     // startBalanceUpdater()
-    // setInterval(() => {
-    //   sweepDeposits();
-    // }, 2 * 60 * 1000);
-    // startWatchers(providers);
-
-    // await fixOldWalletFormats()
+    setInterval(() => {
+      sweepDeposits();
+    }, 2 * 60 * 1000);
 
     console.log("🟢 Engine started");
   })
@@ -279,8 +269,11 @@ async function deleteEmptyMarketsOnBoot() {
     console.log("🧹 Cleaning empty markets...");
 
     const result = await Market.deleteMany({
+      marketType: "CRYPTO",
       tradeCount: 0,
       totalVolume: 0,
+      "subMarkets.tradeCount": { $not: { $gt: 0 } },
+      "subMarkets.totalVolume": { $not: { $gt: 0 } },
     });
 
     console.log(

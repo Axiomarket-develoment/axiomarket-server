@@ -18,14 +18,14 @@ async function mainCycle() {
     // await startOracle(); // or better: fetchPrices()
 
     // 2. CREATE MARKETS
-    await generateMarkets({ durationMinutes: 15 });
+    // await generateMarkets({ durationMinutes: 15 });
     // await generateMarkets({ durationMinutes: 5 });
 
     await generateMarkets({ durationMinutes: 60 });
 
-    await generateMarkets({ durationMinutes: 360 });
+    // await generateMarkets({ durationMinutes: 360 });
 
-    await generateMarkets({ durationMinutes: 720 });
+    // await generateMarkets({ durationMinutes: 720 });
     // 3. END MARKETS
     const now = new Date();
 
