@@ -14,7 +14,7 @@ const { HttpServer } = require("./websocket");
 const Market = require("./models/Market");
 const Ambassador = require("./models/Ambassador");
 const User = require("./models/User");
-
+const Position = require("./models/Position");
 const { startOracle } = require("./services/price/priceOracle");
 const { startEngine } = require("./crons/mastercron");
 const startWatchers = require("./services/blockchain/watcher");
@@ -88,14 +88,15 @@ mongoose
   .then(async () => {
     console.log("🟢 MongoDB connected successfully");
 
+
     // 🔥 Start price oracle
     await startOracle();
 
-    console.log("🟢 Oracle initialized");
-    // 🔥 Start master engine
+    // console.log("🟢 Oracle initialized");
+    // // 🔥 Start master engine
     startEngine();
 
-    // startBalanceUpdater()
+    // // startBalanceUpdater()
     setInterval(() => {
       sweepDeposits();
     }, 2 * 60 * 1000);
@@ -380,6 +381,36 @@ async function fixOldWalletFormats() {
   } catch (err) {
     console.log("❌ Migration error:", err.message);
   }
+}
+
+async function getAmbassadorTradeStats() {
+  const ambassadors = await Ambassador.find({});
+  const results = [];
+
+  for (const ambassador of ambassadors) {
+    const user = await User.findOne({
+      email: ambassador.email,
+    });
+
+    if (!user) continue;
+
+    const trades = await Position.countDocuments({
+      userId: user._id,
+    });
+
+    results.push({
+      email: ambassador.email,
+      username: user.username,
+      trades,
+    });
+  }
+
+  // Lowest trades → Highest trades
+  results.sort((a, b) => b.trades - a.trades);
+
+  console.table(results);
+
+  return results;
 }
 
 async function deleteNonFifaMatches() {

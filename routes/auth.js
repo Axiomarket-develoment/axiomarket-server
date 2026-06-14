@@ -13,6 +13,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 const setAuthCookie = require("../utils/setAuthCookie");
 const sanitizeUser = require("../utils/sanitizeUser");
+const Ambassador = require("../models/Ambassador");
 
 // ==========================
 // 🔥 SYNC USER BALANCE
@@ -56,12 +57,25 @@ router.post("/google", async (req, res) => {
             });
         }
 
+
         const username =
             name?.replace(/\s+/g, "").toLowerCase() ||
             email.split("@")[0];
 
         let user = await User.findOne({ email });
 
+
+        const ambassador = await Ambassador.findOne({
+            email: user.email
+        });
+
+        if (ambassador) {
+            ambassador.user = user._id;
+            await ambassador.save();
+
+            user.isAmbassador = true;
+            await user.save();
+        }
         // ✅ Create user if not exists
         if (!user) {
             user = await User.create({
@@ -107,7 +121,7 @@ router.post("/google", async (req, res) => {
 
         res.json({
             success: true,
-           user: sanitizeUser(freshUser)
+            user: sanitizeUser(freshUser)
         });
 
     } catch (err) {
@@ -147,6 +161,19 @@ router.post("/signup", async (req, res) => {
             }
         });
 
+
+        const ambassador = await Ambassador.findOne({
+            email: user.email
+        });
+
+        if (ambassador) {
+            ambassador.user = user._id;
+            await ambassador.save();
+
+            user.isAmbassador = true;
+            await user.save();
+        }
+
         await syncUserBalance(user, {
             provider: "email"
         });
@@ -169,7 +196,7 @@ router.post("/signup", async (req, res) => {
 
         res.json({
             success: true,
-            user:sanitizeUser(user)
+            user: sanitizeUser(user)
         });
 
     } catch (err) {

@@ -1,5 +1,5 @@
 const getAmbassadorEmailTemplate = () => {
-    return `
+  return `
   <div style="
     background-color:#000000;
     color:#ffffff;
@@ -13,51 +13,49 @@ const getAmbassadorEmailTemplate = () => {
       </div>
 
       <h1 style="color:#ff3b3b;font-size:28px;margin-bottom:20px;">
-        AxioMarket
+        Welcome to the AxioMarket Ambassador Program 🚀
       </h1>
 
       <p>Dear Ambassador,</p>
 
       <p>
-        Welcome, and congratulations on becoming an official ambassador. 
-        We’re excited to have you on board and look forward to building with you.
+        Congratulations and thank you for moving forward to the next stage of the AxioMarket Ambassador Program.
       </p>
 
       <p>
-        Our testnet has been live since April 25, 2026, and you can access it here:<br/>
+        We truly appreciate your commitment and consistency in being part of this journey. 
+        You are now officially part of a more active core group helping shape the future of AxioMarket.
+      </p>
+
+      <p>
+        AxioMarket is now LIVE on MAINNET and fully operational.
+      </p>
+
+      <p>
+        Access the platform here:<br/>
         <a href="https://axiomarket.xyz/login/" style="color:#999999;">
           https://axiomarket.xyz/login/
         </a>
       </p>
 
       <p>
-        The platform is currently stable. However, due to earlier bugs and system 
-        restrictions, we were unable to send out communications, and the platform 
-        could not run continuously for 24 hours at a time.
+        As an ambassador at this stage, your role becomes even more important — sharing, onboarding users, and strengthening the ecosystem.
       </p>
 
       <p>
-        We sincerely apologize for any inconvenience this may have caused.
-      </p>
-
-      <p>
-        Our team is actively working on improvements, and a full system upgrade will 
-        be completed within the next 14 days. In the meantime, you can continue using 
-        the platform, although uptime may still be limited.
-      </p>
-
-      <p>
-        For faster updates, discussions, and direct communication, please join the ambassador group chat:<br/>
-        <a href="https://chat.whatsapp.com/CVlWYYLgifs5cX9icdvxg1" style="color:#999999;">
-          Join WhatsApp Group
+        To stay connected with the team and other selected ambassadors, please join the official WhatsApp group:<br/>
+        <a href="https://chat.whatsapp.com/JJ8DGvc0gUb3Mad2RmukH0?mode=gi_t" style="color:#999999;">
+          Join WhatsApp Ambassador Group
         </a>
       </p>
 
-      <p>Thank you for your patience and support.</p>
+      <p>
+        We are building something big — and we’re glad you’re here early.
+      </p>
 
       <p style="margin-top:30px;">
         Warm regards,<br/>
-        Axio Team
+        AxioMarket Team
       </p>
 
       <div style="text-align:center;margin-top:40px;">
@@ -68,6 +66,5 @@ const getAmbassadorEmailTemplate = () => {
   </div>
   `;
 };
-
 
 module.exports = { getAmbassadorEmailTemplate };
