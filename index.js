@@ -100,12 +100,12 @@ mongoose
     // await deleteNonFifaMatches()
 
     // 🔥 Start master engine
-    startEngine();
+    // startEngine();
 
     // startBalanceUpdater()
-    setInterval(() => {
-      sweepDeposits();
-    }, 2 * 60 * 1000);
+    // setInterval(() => {
+    //   sweepDeposits();
+    // }, 2 * 60 * 1000);
     // startWatchers(providers);
 
     // await fixOldWalletFormats()

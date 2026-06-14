@@ -15,7 +15,7 @@ const SubMarketSchema = new mongoose.Schema({
                                 percentage: { type: Number, default: 50 }
                             }
                          ],
-  marketType:            { type: String, enum: ["CRYPTO","MEME COINS", "SOCIAL","X", "SPORT","POLITICS"] },
+  marketType:            { type: String, enum: ["CRYPTO","MEME COINS", "SOCIAL","X", "SPORT","POLITICS","ENTERTAINMENT"] },
   tradeCount:            { type: Number, default: 0 },
 
   lastPrice:             {type: Number , default: 2.0},
@@ -36,7 +36,7 @@ const MarketSchema = new mongoose.Schema({
 
   createdBy:             {type: mongoose.Schema.Types.ObjectId, ref: "User", required: false},
   question:              { type: String, required: true },
-  marketType:            { type: String, enum: ["CRYPTO","MEME COINS", "SOCIAL", "SPORT","X","POLITICS"] },
+  marketType:            { type: String, enum: ["CRYPTO","MEME COINS", "SOCIAL", "SPORT","X","POLITICS","ENTERTAINMENT"] },
   conversationId:        {type:mongoose.Schema.Types.ObjectId , ref: "Conversation" },
   subMarkets:            [SubMarketSchema],
   // sport data

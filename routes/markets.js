@@ -17,6 +17,7 @@ const { getPrice } = require("../services/price/priceOracle");
 const Conversation = require("../models/conversation");
 const auth = require("../middlewave/auth");
 const sanitizeUser = require("../utils/sanitizeUser");
+const Kol = require("../models/Kol");
 
 
 function validateMarketEntryImpact({
@@ -757,19 +758,26 @@ router.post("/user_market_creaiton", auth, async (req, res) => {
         // -----------------------------------
 
         const ambassadors = await Ambassador.find({});
+        const kols = await Kol.find({});
+
         const isAmbassador = ambassadors.some(
             (a) => a.user?.toString() === userId.toString()
         );
+
+        const isKol = kols.some(
+            (k) => k.user?.toString() === userId.toString()
+        );
+
         // ✅ EMAIL WHITELIST
         const allowedEmails = ["derik0x0x@gmail.com", "ositanwaubani@gmail.com"];
 
 
         const isWhitelistedEmail = allowedEmails.includes(user?.email);
 
-        if (!isAmbassador && !isWhitelistedEmail) {
+        if (!isAmbassador && !isKol && !isWhitelistedEmail) {
             return res.status(403).json({
                 success: false,
-                message: "Only ambassadors can create markets"
+                message: "Only ambassadors, KOLs, or approved users can create markets"
             });
         }
 
@@ -1037,6 +1045,16 @@ router.post("/system_market_creation", async (req, res) => {
                 participants: values.participants || [],
                 participantImages: values.participantImages || [],
                 league: values.country || "Politics",
+                startTime: startDate
+            };
+        }
+
+        if (category === "Entertainment") {
+            marketPayload.event = {
+                name: values.eventName || "",
+                participants: values.participants || [],
+                participantImages: values.participantImages || [],
+                league: "Entertainment",
                 startTime: startDate
             };
         }
