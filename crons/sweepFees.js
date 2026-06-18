@@ -13,6 +13,23 @@ const chainLocks = {
   ETH: false,
   BSC: false,
 };
+const TOKENS = {
+  BSC: [
+    {
+      symbol: "USDT",
+      address: "0x55d398326f99059fF775485246999027B3197955",
+      decimals: 18
+    }
+  ],
+
+  AVAX: [
+    {
+      symbol: "USDT",
+      address: "0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7",
+      decimals: 6
+    }
+  ]
+};
 
 // =========================
 // CONFIG
@@ -184,6 +201,51 @@ async function sweepUserFunds(user, chain, provider) {
   }
 }
 
+async function sweepUserTokens(user, chain, provider) {
+  const tokens = TOKENS[chain];
+  if (!tokens || tokens.length === 0) return;
+
+  for (const tokenInfo of tokens) {
+    const abi = [
+      "function balanceOf(address) view returns (uint256)",
+      "function transfer(address to, uint amount) returns (bool)"
+    ];
+
+    const token = new ethers.Contract(tokenInfo.address, abi, provider);
+
+    const balance = await token.balanceOf(user.wallet.address);
+
+    if (!balance || balance === 0n) continue;
+
+    const signer = await getDecryptedWallet(user.wallet.privateKey, provider);
+    const tokenWithSigner = token.connect(signer);
+
+    const liquidityWallet = await getAdminWallet("liquidity");
+
+    const tx = await tokenWithSigner.transfer(
+      liquidityWallet.address,
+      balance
+    );
+
+    await tx.wait();
+
+    // 🔥 UPDATE USER DB (IMPORTANT)
+    await User.updateOne(
+      { _id: user._id },
+      {
+        $inc: {
+          "balances.USDT": Number(ethers.formatUnits(balance, tokenInfo.decimals))
+        },
+        $set: {
+          "onChainBalances.USDT": 0,
+          "lastSwept.USDT": Date.now()
+        }
+      }
+    );
+
+    console.log(`💰 Swept ${tokenInfo.symbol} for ${user.email}`);
+  }
+}
 // =========================
 // ERC20 SUPPORT (USDT FIXED)
 // =========================async function sweepERC20(user, chain, provider, tokenAddress) {
@@ -230,8 +292,10 @@ async function sweepDeposits() {
       if (!user.wallet?.address) continue;
 
       await sweepUserFunds(user, "AVAX", providers.AVAX);
+      await sweepUserTokens(user, "AVAX", providers.AVAX);
       await sweepUserFunds(user, "ETH", providers.ETH);
       await sweepUserFunds(user, "BSC", providers.BSC);
+      await sweepUserTokens(user, "BSC", providers.BSC);
 
       await new Promise((r) => setTimeout(r, 200));
     }

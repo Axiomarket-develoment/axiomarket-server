@@ -367,38 +367,30 @@ router.post("/user_enter_market", auth, async (req, res) => {
 
         const totalPool = subMarket.outcomes.reduce((a, o) => a + o.pool, 0);
 
-        const MIN_PERCENT = 20;
+        const outcomeCount = subMarket.outcomes.length;
 
-        let raw = subMarket.outcomes.map(o =>
-            totalPool === 0 ? 50 : (o.pool / totalPool) * 100
+        const BASE_LIQUIDITY = 1;
+
+        // Add virtual liquidity to every outcome
+        const displayPools = subMarket.outcomes.map(
+            o => (o.pool || 0) + BASE_LIQUIDITY
         );
 
-        let adjusted = raw.map(p => Math.max(p, MIN_PERCENT));
-
-        let sum = adjusted.reduce((a, b) => a + b, 0);
-
-        if (sum > 100) {
-            const excess = sum - 100;
-
-            const flexibleIndexes = adjusted
-                .map((p, i) => (p > MIN_PERCENT ? i : -1))
-                .filter(i => i !== -1);
-
-            let flexibleSum = flexibleIndexes.reduce((a, i) => a + adjusted[i], 0);
-
-            for (let i of flexibleIndexes) {
-                const share = adjusted[i] / flexibleSum;
-                adjusted[i] -= share * excess;
-            }
-        }
-
-        const finalSum = adjusted.reduce((a, b) => a + b, 0);
-
-        adjusted = adjusted.map(p => (p / finalSum) * 100);
+        const totalDisplayPool = displayPools.reduce(
+            (sum, pool) => sum + pool,
+            0
+        );
 
         subMarket.outcomes.forEach((o, i) => {
-            o.percentage = Number(adjusted[i].toFixed(2));
+            o.percentage = Number(
+                (
+                    (displayPools[i] / totalDisplayPool) *
+                    100
+                ).toFixed(2)
+            );
         });
+
+      
 
         subMarket.tradeCount += 1;
         subMarket.totalVolume += netUsd;
@@ -757,7 +749,7 @@ router.post("/user_market_creaiton", auth, async (req, res) => {
         // AMBASSADOR CHECK (LOOP VERSION)
         // -----------------------------------
 
-   
+
         const ambassador = await Ambassador.findOne({
             email: user.email
         });
