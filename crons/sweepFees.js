@@ -205,6 +205,13 @@ async function sweepUserTokens(user, chain, provider) {
   const tokens = TOKENS[chain];
   if (!tokens || tokens.length === 0) return;
 
+  const nativeBalance = await provider.getBalance(user.wallet.address);
+
+  if (nativeBalance <= 0n) {
+    console.log(`⚠️ ${user.email} | ${chain} | No gas token, skipping USDT sweep`);
+    return;
+  }
+
   for (const tokenInfo of tokens) {
     const abi = [
       "function balanceOf(address) view returns (uint256)",
@@ -216,6 +223,12 @@ async function sweepUserTokens(user, chain, provider) {
     const balance = await token.balanceOf(user.wallet.address);
 
     if (!balance || balance === 0n) continue;
+
+    const formatted = ethers.formatUnits(balance, tokenInfo.decimals);
+
+    console.log(
+      `🔎 ${user.email} | ${chain} | ${tokenInfo.symbol} balance=${formatted}`
+    );
 
     const signer = await getDecryptedWallet(user.wallet.privateKey, provider);
     const tokenWithSigner = token.connect(signer);
@@ -229,21 +242,24 @@ async function sweepUserTokens(user, chain, provider) {
 
     await tx.wait();
 
-    // 🔥 UPDATE USER DB (IMPORTANT)
     await User.updateOne(
       { _id: user._id },
       {
         $inc: {
-          "balances.USDT": Number(ethers.formatUnits(balance, tokenInfo.decimals))
+          [`balances.${tokenInfo.symbol}`]: Number(formatted)
         },
         $set: {
-          "onChainBalances.USDT": 0,
-          "lastSwept.USDT": Date.now()
+          [`onChainBalances.${tokenInfo.symbol}`]: 0,
+          [`lastSwept.${tokenInfo.symbol}`]: Date.now()
         }
       }
     );
 
-    console.log(`💰 Swept ${tokenInfo.symbol} for ${user.email}`);
+    
+
+    console.log(
+      `💰 ${user.email} | SWEPT ${tokenInfo.symbol} = ${formatted} ${chain}`
+    );
   }
 }
 // =========================

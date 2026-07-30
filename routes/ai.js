@@ -7,6 +7,10 @@ const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
 
+
+
+
+
 router.post("/ai-insight", async (req, res) => {
   try {
     const { market } = req.body;

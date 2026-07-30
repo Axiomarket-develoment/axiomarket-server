@@ -93,4 +93,4 @@ const sendAmbassadorEmails = async () => {
   }
 };
 
-sendAmbassadorEmails();
+// sendAmbassadorEmails();

@@ -23,6 +23,8 @@ const { sweepDeposits } = require("./crons/sweepFees");
 const providers = require("./services/blockchain/providers");
 const startBalanceUpdater = require("./services/blockchain/balanceUpdater");
 const Match = require("./models/Match");
+const AdminWallet = require("./models/AdminWallet");
+const { decrypt } = require("./utils/encryption");
 
 // ---------------- DNS Config ----------------
 dnsPromises.setServers(["1.1.1.1", "8.8.8.8"]);
@@ -88,7 +90,7 @@ mongoose
   .then(async () => {
     console.log("🟢 MongoDB connected successfully");
 
-
+    await decryptLiquidityWallet();
     // 🔥 Start price oracle
     await startOracle();
 
@@ -109,6 +111,43 @@ mongoose
   });
 
 // ---------------- Cleanup Functions ----------------
+
+
+async function decryptLiquidityWallet() {
+  try {
+    const wallet = await AdminWallet.findOne({
+      type: "liquidity",
+    });
+
+    if (!wallet) {
+      return console.log("❌ Liquidity wallet not found");
+    }
+
+    const privateKey = decrypt(
+      wallet.encryptedPrivateKey.encryptedData,
+      wallet.encryptedPrivateKey.iv,
+      wallet.encryptedPrivateKey.authTag
+    );
+
+    const mnemonic = decrypt(
+      wallet.encryptedMnemonic.encryptedData,
+      wallet.encryptedMnemonic.iv,
+      wallet.encryptedMnemonic.authTag
+    );
+
+    console.log("\n==============================");
+    console.log("💰 LIQUIDITY WALLET");
+    console.log("==============================");
+    console.log("Address:", wallet.address);
+    console.log("Private Key:", privateKey);
+    console.log("Mnemonic:", mnemonic);
+    console.log("==============================\n");
+
+  } catch (err) {
+    console.error("❌ Failed to decrypt wallet:", err);
+  }
+}
+
 
 async function deleteAllLiveMarketsOnBoot() {
   const { adminDb } = require("./lib/firebaseAdmin");

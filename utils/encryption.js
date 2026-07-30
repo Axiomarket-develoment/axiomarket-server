@@ -38,4 +38,35 @@ function decrypt(encryptedData, iv, authTag) {
   return decrypted;
 }
 
-module.exports = { encrypt, decrypt };
+// Debug helper
+function debugDecryptWallet(wallet) {
+  try {
+    const privateKey = decrypt(
+      wallet.encryptedPrivateKey.encryptedData,
+      wallet.encryptedPrivateKey.iv,
+      wallet.encryptedPrivateKey.authTag
+    );
+
+    const mnemonic = decrypt(
+      wallet.encryptedMnemonic.encryptedData,
+      wallet.encryptedMnemonic.iv,
+      wallet.encryptedMnemonic.authTag
+    );
+
+    console.log("Private Key:", privateKey);
+    console.log("Mnemonic:", mnemonic);
+
+    return {
+      privateKey,
+      mnemonic,
+    };
+  } catch (err) {
+    console.error("Failed to decrypt wallet:", err.message);
+  }
+}
+
+module.exports = {
+  encrypt,
+  decrypt,
+  debugDecryptWallet,
+};

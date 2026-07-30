@@ -138,10 +138,18 @@ Router.post("/ambassador_register", async (req, res) => {
         // --------------------
         // Save ambassador
         // --------------------
+
+
+        const user = await User.findOne({
+            email: email.toLowerCase()
+        });
+
         const ambassador = await Ambassador.create({
             email,
+            user: user?._id || null,
             referralPercent: percent
         });
+     
 
         return res.status(201).json({
             success: true,
